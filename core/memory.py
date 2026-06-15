@@ -28,6 +28,14 @@ async def init_memory() -> None:
     )
 
 
+async def reload_memory() -> None:
+    """Recharge la mémoire vectorielle si la configuration a changé."""
+    global _chroma_client, _collection
+    _chroma_client = None
+    _collection = None
+    await init_memory()
+
+
 def _get_collection() -> chromadb.Collection:
     if _collection is None:
         raise RuntimeError("Mémoire non initialisée. Appelle init_memory() d'abord.")

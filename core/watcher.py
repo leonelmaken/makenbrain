@@ -62,6 +62,18 @@ async def _auto_ingest(file_path: str, event_type: str) -> None:
         _ingestion_log.append(entry)
         if not result.get("skipped"):
             logger.info(f"Auto-ingéré [{event_type}]: {Path(file_path).name} ({result.get('chunks_created', 0)} fragments)")
+            
+            # --- CONNECTION AU COEUR DE CONSCIENCE ---
+            from core.consciousness import consciousness
+            asyncio.create_task(consciousness.observe_event(
+                event_type=f"file_{event_type}",
+                data={
+                    "file": Path(file_path).name,
+                    "path": file_path,
+                    "summary": result.get("summary", "Pas de résumé disponible")
+                }
+            ))
+            # ------------------------------------------
     except Exception as e:
         _ingestion_log.append({
             "timestamp": datetime.now().isoformat(),

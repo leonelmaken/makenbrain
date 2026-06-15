@@ -25,4 +25,12 @@ class Settings(BaseSettings):
         extra = "ignore"
 
 
+def reload_settings(env_file: str = ".env") -> Settings:
+    """Recharge la configuration à partir du fichier .env et des variables d'environnement."""
+    new_settings = Settings(_env_file=env_file)
+    for field, value in new_settings.model_dump().items():
+        setattr(settings, field, value)
+    return settings
+
+
 settings = Settings()

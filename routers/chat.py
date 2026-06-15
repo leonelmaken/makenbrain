@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from core.llm import generate, check_ollama_status
+from core.personality import personality_engine
 from core.memory import search_memory
 from core.providers import groq_generate, detect_provider
 from core.config import settings
@@ -117,11 +118,16 @@ async def chat(request: ChatRequest):
     # ── 4. Choix du provider et génération ────────────────────────────────────
     chosen = detect_provider(request.message, request.provider)
 
+    # --- ADAPTATION PERSONNALITE ---
+    style = personality_engine.detect_style(request.message)
+    dynamic_prompt = personality_engine.get_system_prompt(style)
+    # -------------------------------
+
     if chosen == "groq":
-        response_text = await groq_generate(request.message, context)
+        response_text = await groq_generate(request.message, context, system_prompt=dynamic_prompt)
         model_name = "llama-3.3-70b-versatile (Groq)"
     else:
-        response_text = await generate(request.message, context)
+        response_text = await generate(request.message, context, system_prompt=dynamic_prompt)
         model_name = settings.OLLAMA_MODEL + " (local)"
 
     return ChatResponse(
@@ -138,3 +144,9 @@ async def chat(request: ChatRequest):
 async def status():
     """Statut du LLM local Ollama."""
     return await check_ollama_status()
+
+
+@router.get("/welcome")
+async def welcome():
+    """Message d'accueil personnalisé de MakenBrain."""
+    return {"message": personality_engine.get_greeting()}

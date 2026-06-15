@@ -13,6 +13,11 @@ from core.providers import (
     wikipedia_search, wikipedia_ingest,
     GROQ_MODEL,
 )
+from core.config import settings, reload_settings
+from core.llm import reload_client as reload_llm_client
+from core.summarizer import reload_client as reload_summarizer_client
+from core.memory import reload_memory
+from core.scheduler import load_config as load_scheduler_config
 
 router = APIRouter()
 
@@ -110,3 +115,33 @@ async def wiki(request: WikiRequest):
     else:
         result = await wikipedia_search(request.query, request.lang)
         return {"action": "search only", **result}
+
+
+@router.post("/reload-config")
+async def reload_config():
+    """Recharge la configuration depuis le fichier .env et réinitialise les clients utiles."""
+    reload_settings()
+    reload_llm_client()
+    reload_summarizer_client()
+    await reload_memory()
+
+    scheduler_config = load_scheduler_config()
+
+    return {
+        "message": "Configuration rechargée avec succès.",
+        "settings": {
+            "OLLAMA_HOST": settings.OLLAMA_HOST,
+            "OLLAMA_MODEL": settings.OLLAMA_MODEL,
+            "CHROMA_PATH": settings.CHROMA_PATH,
+            "COLLECTION_NAME": settings.COLLECTION_NAME,
+            "EMBED_MODEL": settings.EMBED_MODEL,
+            "API_HOST": settings.API_HOST,
+            "API_PORT": settings.API_PORT,
+            "providers": {
+                "groq_enabled": bool(settings.GROQ_API_KEY),
+                "hf_enabled": bool(settings.HF_API_KEY),
+                "anthropic_enabled": bool(settings.ANTHROPIC_API_KEY),
+            },
+        },
+        "scheduler_config": scheduler_config,
+    }

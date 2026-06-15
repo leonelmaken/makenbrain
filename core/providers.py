@@ -44,18 +44,18 @@ def should_use_groq(message: str) -> bool:
 
 def detect_provider(message: str, requested: str = "auto") -> str:
     """
-    Retourne le provider à utiliser : 'groq' ou 'local'.
-    - 'auto'  → décision intelligente basée sur la complexité
-    - 'groq'  → forcer Groq
-    - 'local' → forcer le LLM local
+    Retourne le provider à utiliser. 
+    Priorise le Cloud (Groq/Gemini) si configuré pour éviter les pannes locales.
     """
     if requested == "local":
         return "local"
-    if requested == "groq":
+    if requested == "groq" or requested == "gemini":
         return "groq" if settings.GROQ_API_KEY else "local"
-    # auto
-    if settings.GROQ_API_KEY and should_use_groq(message):
+    
+    # En mode auto : si Groq est configuré, on l'utilise pour garantir la puissance et la disponibilité
+    if settings.GROQ_API_KEY:
         return "groq"
+        
     return "local"
 
 
@@ -71,6 +71,7 @@ async def groq_generate(
     prompt: str,
     context: str = "",
     model: str = GROQ_MODEL,
+    system_prompt: str = None
 ) -> str:
     """
     Génère une réponse via Groq (Llama 3.3 70B).
@@ -78,6 +79,8 @@ async def groq_generate(
     """
     client = _groq_client()
     messages = []
+    
+    current_system = system_prompt or SYSTEM_PROMPT
 
     if context:
         messages.append({
@@ -93,7 +96,7 @@ async def groq_generate(
 
     response = client.chat.completions.create(
         model=model,
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
+        messages=[{"role": "system", "content": current_system}] + messages,
         temperature=0.7,
         max_tokens=2048,
     )

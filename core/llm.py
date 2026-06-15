@@ -4,6 +4,12 @@ from core.config import settings
 # Client Ollama
 _client = ollama.Client(host=settings.OLLAMA_HOST)
 
+
+def reload_client() -> None:
+    """Recharge le client Ollama avec les paramètres de configuration actuels."""
+    global _client
+    _client = ollama.Client(host=settings.OLLAMA_HOST)
+
 SYSTEM_PROMPT = """Tu es MakenBrain, le cerveau numérique personnel de MAKEN (Leonel Maken), ingénieur full-stack basé à Yaoundé.
 
 Ton rôle :
@@ -20,12 +26,15 @@ Comportement :
 """
 
 
-async def generate(prompt: str, context: str = "") -> str:
+async def generate(prompt: str, context: str = "", system_prompt: str = None) -> str:
     """
     Génère une réponse en utilisant le LLM local Ollama.
     Si un contexte mémoire est fourni, il est injecté (RAG).
     """
     messages = []
+    
+    # Utiliser le prompt système fourni ou le prompt par défaut
+    current_system = system_prompt or SYSTEM_PROMPT
 
     if context:
         messages.append({
@@ -43,12 +52,15 @@ async def generate(prompt: str, context: str = "") -> str:
 
     messages.append({"role": "user", "content": prompt})
 
-    response = _client.chat(
-        model=settings.OLLAMA_MODEL,
-        messages=[{"role": "system", "content": SYSTEM_PROMPT}] + messages,
-        options={"temperature": 0.7, "num_predict": 1024},
-    )
-    return response.message.content
+    try:
+        response = _client.chat(
+            model=settings.OLLAMA_MODEL,
+            messages=[{"role": "system", "content": current_system}] + messages,
+            options={"temperature": 0.7, "num_predict": 1024},
+        )
+        return response.message.content
+    except Exception as e:
+        return f"Désolé MAKEN, mon module local (Ollama) semble éteint. Peux-tu le lancer ou me demander d'utiliser Groq ? (Erreur: {e})"
 
 
 async def check_ollama_status() -> dict:

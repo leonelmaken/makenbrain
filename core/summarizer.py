@@ -7,6 +7,12 @@ from core.config import settings
 
 _client = ollama.Client(host=settings.OLLAMA_HOST)
 
+
+def reload_client() -> None:
+    """Recharge le client Ollama pour le résumé avec les paramètres actuels."""
+    global _client
+    _client = ollama.Client(host=settings.OLLAMA_HOST)
+
 SUMMARY_PROMPT = """Tu es un assistant de synthèse expert. Résume le document suivant en 3 à 5 phrases.
 Le résumé doit être :
 - Factuel et précis
