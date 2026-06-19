@@ -6,11 +6,12 @@ Endpoints Phase 2 :
 """
 import asyncio
 import re
+import tempfile
 from pathlib import Path
 from typing import Optional
 
 import fitz  # PyMuPDF
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 
 from core.dedup import is_duplicate, register
@@ -22,7 +23,7 @@ router = APIRouter()
 
 SUPPORTED_EXT = {
     # Frontend / Mobile
-    ".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".txt",
+    ".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".txt", ".csv", ".log",
     # Backend Java / Spring Boot
     ".java", ".xml", ".yml", ".yaml", ".properties", ".sql", ".gradle", ".http",
     # Docs & Config
@@ -202,6 +203,72 @@ async def ingest_file(request: IngestFileRequest):
         raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+from core.archiver import archiver
+
+@router.post("/upload")
+async def upload_files(files: list[UploadFile] = File(...), tags: str = Form("")):
+    """
+    Reçoit des fichiers ou des archives ZIP.
+    Si c'est un ZIP, il est extrait et chaque fichier interne est ingéré.
+    """
+    results = []
+    for f in files:
+        suffix = Path(f.filename).suffix.lower()
+        
+        # Cas spécial : Archive ZIP
+        if suffix == ".zip":
+            data = await f.read()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_zip:
+                tmp_zip.write(data)
+                zip_path = Path(tmp_zip.name)
+            
+            try:
+                extract_dir = archiver.extract_zip(zip_path)
+                internal_files = archiver.list_files(extract_dir)
+                
+                ok_count = 0
+                zip_report = {"archive": f.filename, "files_count": len(internal_files), "processed": []}
+                for int_f in internal_files:
+                    try:
+                        res = await ingest_single_file(str(int_f), tags=f"zip,{f.filename},{tags}", with_summary=False)
+                        zip_report["processed"].append(res)
+                        if not res.get("skipped"): ok_count += 1
+                    except Exception as e:
+                        zip_report["processed"].append({"file": int_f.name, "error": str(e)})
+                
+                zip_report["message"] = f"{ok_count} fichiers de l'archive ingérés."
+                results.append(zip_report)
+                archiver.cleanup(extract_dir)
+            finally:
+                zip_path.unlink(missing_ok=True)
+            continue
+
+        # Cas normal : Fichier unique
+        if suffix not in SUPPORTED_EXT:
+            results.append({"file": f.filename, "skipped": True, "reason": "format non supporté"})
+            continue
+
+        data = await f.read()
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(data)
+                tmp_path = tmp.name
+            result = await ingest_single_file(tmp_path, tags, with_summary=False)
+            result["file"] = f.filename
+            results.append(result)
+        except Exception as e:
+            results.append({"file": f.filename, "skipped": True, "reason": str(e)})
+        finally:
+            if tmp_path:
+                Path(tmp_path).unlink(missing_ok=True)
+
+    return {
+        "message": f"Traitement terminé pour {len(files)} élément(s).",
+        "results": results,
+    }
 
 
 @router.post("/ingest-folder")

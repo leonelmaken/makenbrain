@@ -26,10 +26,11 @@ Comportement :
 """
 
 
-async def generate(prompt: str, context: str = "", system_prompt: str = None) -> str:
+async def generate(prompt: str, context: str = "", system_prompt: str = None, stream: bool = False):
     """
     Génère une réponse en utilisant le LLM local Ollama.
     Si un contexte mémoire est fourni, il est injecté (RAG).
+    Supporte le streaming si stream=True.
     """
     messages = []
     
@@ -53,14 +54,28 @@ async def generate(prompt: str, context: str = "", system_prompt: str = None) ->
     messages.append({"role": "user", "content": prompt})
 
     try:
-        response = _client.chat(
-            model=settings.OLLAMA_MODEL,
-            messages=[{"role": "system", "content": current_system}] + messages,
-            options={"temperature": 0.7, "num_predict": 1024},
-        )
-        return response.message.content
+        if stream:
+            # Mode streaming : retourne un générateur
+            return _client.chat(
+                model=settings.OLLAMA_MODEL,
+                messages=[{"role": "system", "content": current_system}] + messages,
+                options={"temperature": 0.7, "num_predict": 1024},
+                stream=True
+            )
+        else:
+            # Mode normal : bloque jusqu'à la fin
+            response = _client.chat(
+                model=settings.OLLAMA_MODEL,
+                messages=[{"role": "system", "content": current_system}] + messages,
+                options={"temperature": 0.7, "num_predict": 1024},
+            )
+            return response.message.content
     except Exception as e:
-        return f"Désolé MAKEN, mon module local (Ollama) semble éteint. Peux-tu le lancer ou me demander d'utiliser Groq ? (Erreur: {e})"
+        err_msg = f"Désolé MAKEN, mon module local (Ollama) semble éteint. Peux-tu le lancer ou me demander d'utiliser Groq ? (Erreur: {e})"
+        if stream:
+            async def err_gen(): yield {"message": {"content": err_msg}}
+            return err_gen()
+        return err_msg
 
 
 async def check_ollama_status() -> dict:

@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MakenBrain v4 — NEURAL CORE</title>
+<style>
+/* --- CONFIGURATION VISUELLE JARVIS --- */
+:root {
+  --neon-blue: #00f2ff;
+  --neon-purple: #7000ff;
+  --glass-bg: rgba(10, 15, 30, 0.75);
+  --border: rgba(0, 242, 255, 0.2);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;cursor: crosshair;}
+body{background:#020205;color:#fff;font-family: 'Segoe UI', sans-serif;overflow:hidden;width:100vw;height:100vh;}
+
+#canvas-container {position:fixed;inset:0;z-index:1;}
+#overlay {position:fixed;inset:0;z-index:10;pointer-events:none;
+  background: radial-gradient(circle at center, transparent 0%, rgba(2,2,5,0.4) 100%);
+  border: 20px solid rgba(0,242,255,0.02);
+}
+
+/* --- HUD & GLASSMORPHISM --- */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(15px);
+  border: 1px solid var(--border);
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.1);
+  pointer-events: all;
+}
+
+#top-bar {
+  position: absolute; top: 20px; left: 20px; right: 20px; height: 50px;
+  display: flex; align-items: center; padding: 0 20px; border-radius: 12px;
+}
+.status-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--neon-blue); 
+  box-shadow: 0 0 10px var(--neon-blue); margin-right: 15px; animation: pulse 2s infinite; }
+
+#side-left, #side-right {
+  position: absolute; top: 90px; width: 260px; padding: 20px; border-radius: 15px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+#side-left { left: 20px; transform: translateX(-110%); }
+#side-right { right: 20px; transform: translateX(110%); }
+
+.panel-title { font-size: 10px; letter-spacing: 3px; color: var(--neon-blue); opacity: 0.6; text-transform: uppercase; }
+.stat-box { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; border-left: 3px solid var(--neon-blue); }
+.stat-val { font-size: 24px; font-weight: bold; font-family: monospace; }
+
+/* --- TERMINAL DE SAISIE --- */
+#terminal-container {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  width: min(800px, 90%); display: flex; align-items: center; gap: 15px;
+  padding: 10px 10px 10px 25px; border-radius: 50px; z-index: 100;
+}
+#user-input {
+  flex: 1; background: none; border: none; outline: none; color: #fff;
+  font-size: 16px; letter-spacing: 1px;
+}
+.action-btn {
+  width: 50px; height: 50px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: 0.3s;
+}
+#mic-btn { background: rgba(255,255,255,0.05); color: var(--neon-blue); }
+#mic-btn.recording { background: rgba(255, 0, 0, 0.2); color: #ff4444; box-shadow: 0 0 20px rgba(255,0,0,0.4); }
+#send-btn { background: linear-gradient(45deg, var(--neon-blue), var(--neon-purple)); color: #000; }
+#send-btn:hover { transform: scale(1.1) rotate(5deg); }
+
+/* --- HISTORIQUE --- */
+#history-sidebar {
+  position: fixed; left: -320px; top: 0; bottom: 0; width: 300px;
+  z-index: 200; padding: 30px 20px; transition: 0.5s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+#history-sidebar.active { left: 0; }
+.history-item { 
+  padding: 15px; margin-bottom: 10px; border-radius: 10px; background: rgba(255,255,255,0.03);
+  cursor: pointer; border: 1px solid transparent; transition: 0.3s;
+}
+.history-item:hover { border-color: var(--neon-blue); background: rgba(0,242,255,0.05); }
+
+/* --- ANIMATIONS --- */
+@keyframes pulse { 0% { opacity: 0.4; } 50% { opacity: 1; } 100% { opacity: 0.4; } }
+
+/* --- INDICATEUR DE RÉFLEXION --- */
+#thinking { position: absolute; top: 150px; left: 50%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; gap: 10px;}
+.spinner { width: 40px; height: 40px; border: 3px solid rgba(0,242,255,0.1); border-top: 3px solid var(--neon-blue); border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<div id="overlay"></div>
+
+<div id="hud">
+  <!-- Top Bar -->
+  <div id="top-bar" class="glass">
+    <div class="status-dot"></div>
+    <div style="font-weight: bold; letter-spacing: 2px;">MAKENBRAIN <span style="opacity:0.5; font-weight:normal;">v4.0</span></div>
+    <div style="margin-left: auto; font-family: monospace; color: var(--neon-blue);" id="clock">00:00:00</div>
+    <button id="toggle-history" style="background:none; border:none; color:#fff; margin-left:20px; font-size:20px; cursor:pointer;">☰</button>
+  </div>
+
+  <!-- Panels -->
+  <div id="side-left" class="glass">
+    <div class="panel-title">Mémoire Vectorielle</div>
+    <div class="stat-box">
+      <div style="font-size: 9px; opacity:0.6;">SOUVENIRS ENRAMÉS</div>
+      <div class="stat-val" id="count-mem">0</div>
+    </div>
+    <div class="stat-box">
+      <div style="font-size: 9px; opacity:0.6;">CONCEPTS EXTRAITS</div>
+      <div class="stat-val" id="count-graph" style="color: var(--neon-purple);">0</div>
+    </div>
+  </div>
+
+  <div id="side-right" class="glass">
+    <div class="panel-title">Système Nerveux</div>
+    <div class="stat-box">
+      <div style="font-size: 9px; opacity:0.6;">CHARGE CPU IA</div>
+      <div class="stat-val" id="cpu-load">12%</div>
+    </div>
+    <div id="domain-tag" style="background: rgba(0,242,255,0.1); padding: 10px; border-radius: 5px; font-size: 11px; text-align: center; border: 1px solid var(--neon-blue);">DOMAINE: GÉNÉRAL</div>
+  </div>
+
+  <!-- Thinking Indicator -->
+  <div id="thinking">
+    <div class="spinner"></div>
+    <div style="font-size: 10px; letter-spacing: 2px; color: var(--neon-blue);">ANALYSE SYNAPTIQUE...</div>
+  </div>
+
+  <!-- Sidebar Historique -->
+  <div id="history-sidebar" class="glass">
+    <div class="panel-title" style="margin-bottom: 20px;">Archives de Pensée</div>
+    <div id="history-list">
+      <div class="history-item">Chargement...</div>
+    </div>
+  </div>
+
+  <!-- Bottom Input -->
+  <div id="terminal-container" class="glass">
+    <button class="action-btn" id="mic-btn" title="Reconnaissance vocale">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+    </button>
+    <input type="text" id="user-input" placeholder="Parlez ou écrivez ici..." autocomplete="off">
+    <button class="action-btn" id="send-btn">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+<script>
+/* --- CORE CONFIG --- */
+const API = '';
+let activity = 0;
+let scene, camera, renderer, core, particles, grid;
+
+function initThree() {
+  const container = document.getElementById('canvas-container');
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  container.appendChild(renderer.domElement);
+
+  // 1. NEURAL CORE (The "WOW" Orb)
+  const coreGeom = new THREE.IcosahedronGeometry(1.2, 4);
+  const coreMat = new THREE.MeshPhongMaterial({
+    color: 0x00f2ff,
+    wireframe: true,
+    transparent: true,
+    opacity: 0.8,
+    emissive: 0x00f2ff,
+    emissiveIntensity: 0.5
+  });
+  core = new THREE.Mesh(coreGeom, coreMat);
+  scene.add(core);
+
+  // Inner Core
+  const innerGeom = new THREE.SphereGeometry(0.7, 32, 32);
+  const innerMat = new THREE.MeshPhongMaterial({ color: 0x7000ff, transparent: true, opacity: 0.4 });
+  const inner = new THREE.Mesh(innerGeom, innerMat);
+  core.add(inner);
+
+  // 2. CYBER GRID
+  const gridGeom = new THREE.PlaneGeometry(100, 100, 50, 50);
+  const gridMat = new THREE.MeshBasicMaterial({ color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.05 });
+  grid = new THREE.Mesh(gridGeom, gridMat);
+  grid.rotation.x = -Math.PI / 2;
+  grid.position.y = -5;
+  scene.add(grid);
+
+  // 3. PARTICLES
+  const pCount = 3000;
+  const pGeom = new THREE.BufferGeometry();
+  const pPos = new Float32Array(pCount * 3);
+  for(let i=0; i<pCount*3; i++) pPos[i] = (Math.random() - 0.5) * 15;
+  pGeom.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  particles = new THREE.Points(pGeom, new THREE.PointsMaterial({color: 0x00f2ff, size: 0.02, transparent: true, opacity: 0.3}));
+  scene.add(particles);
+
+  const light = new THREE.PointLight(0x00f2ff, 2, 10);
+  light.position.set(0, 0, 2);
+  scene.add(light);
+  scene.add(new THREE.AmbientLight(0x404040));
+
+  animate();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const time = performance.now() * 0.001;
+
+  core.rotation.y += 0.005 + (activity * 0.05);
+  core.rotation.z += 0.002;
+  core.scale.setScalar(1 + Math.sin(time * 2) * 0.05 + (activity * 0.2));
+
+  grid.position.z = (time * 2) % 2; // Moving grid effect
+  
+  particles.rotation.y -= 0.001;
+  const pAttr = particles.geometry.attributes.position;
+  for(let i=0; i<pAttr.count; i++) {
+    const y = pAttr.array[i*3 + 1];
+    pAttr.array[i*3 + 1] += Math.sin(time + i) * 0.01;
+  }
+  pAttr.needsUpdate = true;
+
+  renderer.render(scene, camera);
+}
+
+/* --- HUD ANIMATIONS --- */
+function startHUD() {
+  gsap.to("#side-left", { x: 0, opacity: 1, duration: 1.5, ease: "expo.out", delay: 0.5 });
+  gsap.to("#side-right", { x: 0, opacity: 1, duration: 1.5, ease: "expo.out", delay: 0.7 });
+  
+  setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR');
+  }, 1000);
+}
+
+/* --- LOGIQUE MÉTIER (MICRO, CHAT, HISTO) --- */
+const input = document.getElementById('user-input');
+const micBtn = document.getElementById('mic-btn');
+let recognition;
+
+// 1. RECONNAISSANCE VOCALE (FIX)
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const Speech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new Speech();
+  recognition.lang = 'fr-FR';
+  recognition.continuous = false;
+  
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    input.value = text;
+    sendChat();
+  };
+  
+  recognition.onend = () => { micBtn.classList.remove('recording'); };
+}
+
+micBtn.onclick = () => {
+  if (!recognition) return alert("Micro non supporté sur ce navigateur.");
+  micBtn.classList.add('recording');
+  recognition.start();
+};
+
+// 2. ENVOI CHAT
+async function sendChat() {
+  const msg = input.value.trim();
+  if(!msg) return;
+  input.value = '';
+  
+  activity = 1;
+  document.getElementById('thinking').style.display = 'flex';
+  
+  try {
+    const res = await fetch(`${API}/chat/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: msg, use_memory: true })
+    });
+    const data = await res.json();
+    
+    // Alerte "Wow"
+    showFlashMessage(data.response);
+    
+  } catch(e) {
+    showFlashMessage("ERREUR: Connexion au cortex perdue.");
+  } finally {
+    activity = 0;
+    document.getElementById('thinking').style.display = 'none';
+  }
+}
+
+document.getElementById('send-btn').onclick = sendChat;
+input.onkeydown = (e) => { if(e.key === 'Enter') sendChat(); };
+
+// 3. HISTORIQUE
+const histSidebar = document.getElementById('history-sidebar');
+document.getElementById('toggle-history').onclick = () => {
+  histSidebar.classList.toggle('active');
+  if(histSidebar.classList.contains('active')) loadHistory();
+};
+
+async function loadHistory() {
+  const list = document.getElementById('history-list');
+  try {
+    const res = await fetch(`${API}/history/list`);
+    const data = await res.json();
+    list.innerHTML = '';
+    data.sessions.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `<strong>${s.topic}</strong><br><small>${s.message_count} messages</small>`;
+      div.onclick = () => { alert("Chargement session: " + s.id); histSidebar.classList.remove('active'); };
+      list.appendChild(div);
+    });
+  } catch(e) { list.innerHTML = 'Erreur historique.'; }
+}
+
+function showFlashMessage(txt) {
+  const right = document.getElementById('side-right');
+  const alert = document.createElement('div');
+  alert.style.cssText = "background: rgba(0,242,255,0.1); border: 1px solid var(--neon-blue); padding: 10px; margin-top:10px; border-radius:5px; font-size:11px; animation: slideIn 0.3s forwards;";
+  alert.textContent = txt.substring(0, 150) + "...";
+  right.appendChild(alert);
+  setTimeout(() => alert.remove(), 10000);
+}
+
+// Stats temps réel
+async function updateStats() {
+  try {
+    const resM = await fetch(`${API}/memory/stats`);
+    const dataM = await resM.json();
+    document.getElementById('count-mem').textContent = dataM.total_memories || 0;
+    
+    const resG = await fetch(`${API}/graph/stats`);
+    const dataG = await resG.json();
+    document.getElementById('count-graph').textContent = dataG.nodes || 0;
+  } catch(e) {}
+}
+
+window.onload = () => {
+  initThree();
+  startHUD();
+  updateStats();
+  setInterval(updateStats, 20000);
+};
+
+window.onresize = () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+};
+</script>
+</body>
+</html>

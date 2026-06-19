@@ -1,5 +1,35 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
+from datetime import datetime
+
+# ── Identité & Projets (Phase 1) ──────────────────────────────────────────────
+
+class UserGoal(BaseModel):
+    id: str
+    description: str
+    priority: int = 1  # 1 (Bas) à 5 (Critique)
+    progress: float = 0.0  # 0.0 à 1.0
+    status: str = "active"  # active, completed, archived
+
+class UserContext(BaseModel):
+    name: str = "MAKEN"
+    role: str = "Ingénieur Full-stack"
+    preferences: dict = Field(default_factory=dict)
+    core_values: list[str] = Field(default_factory=list)
+    bio: Optional[str] = None
+    goals: list[UserGoal] = Field(default_factory=list)
+    updated_at: str = Field(default_factory=lambda: datetime.now().isoformat())
+
+class ProjectContext(BaseModel):
+    id: str
+    name: str
+    description: str
+    status: str = "active"
+    tags: list[str] = Field(default_factory=list)
+    milestones: list[dict] = Field(default_factory=list)
+    files_context: list[str] = Field(default_factory=list)  # Chemins de fichiers clés
+    created_at: str
+    updated_at: str
 
 
 # ── Chat ─────────────────────────────────────────────────────────────────────
@@ -9,6 +39,7 @@ class ChatRequest(BaseModel):
     use_memory: bool = Field(True, description="Utiliser la mémoire pour contextualiser")
     n_context: int = Field(5, ge=1, le=20, description="Nombre de souvenirs à récupérer")
     relevance_threshold: float = Field(0.75, ge=0.0, le=1.0, description="Seuil de pertinence (distance cosinus)")
+    stream: bool = False
 
     model_config = {"json_schema_extra": {
         "example": {

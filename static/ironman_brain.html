@@ -3,468 +3,417 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🧠 MakenBrain — Ironman v2.0</title>
+<title>🧠 MakenBrain — Digital Cortex v4.5</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Syncopate:wght@700&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-html,body{width:100%;height:100%;background:#020408;overflow:hidden;
-  font-family:'Courier New',monospace;color:#00D4FF}
-#c{position:fixed;inset:0;z-index:0}
-#scanlines{position:fixed;inset:0;z-index:1;pointer-events:none;
-  background:repeating-linear-gradient(0deg,transparent,transparent 2px,
-  rgba(0,0,0,0.04) 2px,rgba(0,0,0,0.04) 4px)}
-#hud{position:fixed;inset:0;z-index:10;pointer-events:none}
+:root { --bg: #05060b; --accent: #2de2c9; --text: #9fb4c9; --panel: rgba(10, 11, 20, 0.95); --danger: #ff4d4d; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
 
-/* ── Top bar ── */
-#top{position:absolute;top:0;left:0;right:0;
-  display:flex;align-items:center;gap:16px;padding:14px 24px;
-  background:rgba(2,4,8,.75);border-bottom:1px solid rgba(0,212,255,.1);
-  backdrop-filter:blur(12px)}
-.logo{font-size:12px;font-weight:700;letter-spacing:5px;color:#00D4FF}
-.dot{width:5px;height:5px;border-radius:50%;background:#00FF88;
-  animation:blink 2s ease-in-out infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
-#status{font-size:10px;letter-spacing:3px;color:rgba(0,212,255,.6)}
-.tag{font-size:9px;letter-spacing:2px;padding:2px 8px;
-  border:1px solid rgba(0,212,255,.2);color:rgba(0,212,255,.4);border-radius:1px}
-#clock{margin-left:auto;font-size:11px;color:rgba(0,212,255,.4);letter-spacing:3px}
+#c { position: fixed; inset: 0; z-index: 0; opacity: 0.6; pointer-events: none; }
 
-/* ── Left panel ── */
-#left{position:absolute;top:58px;left:20px;width:210px;
-  background:rgba(0,212,255,.03);border:1px solid rgba(0,212,255,.1);
-  border-radius:3px;padding:14px}
-.ptitle{font-size:8px;letter-spacing:5px;color:rgba(0,212,255,.35);margin-bottom:10px}
-.metric{margin:7px 0}
-.mlabel{font-size:8px;color:rgba(0,212,255,.35);letter-spacing:2px}
-.mval{font-size:18px;font-weight:700;color:#00D4FF;line-height:1.1}
-.mbar{height:1px;background:rgba(0,212,255,.08);margin-top:3px;overflow:hidden}
-.mfill{height:1px;background:#00D4FF;width:0%;transition:width 1.2s ease}
+/* ── SIDEBAR (CLAUDE STYLE) ── */
+#sidebar {
+  position: fixed; top: 0; left: -320px; width: 300px; height: 100%; z-index: 10000;
+  background: #080912; border-right: 1px solid rgba(255,255,255,0.1);
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 80px 20px 20px; pointer-events: all;
+  display: flex; flex-direction: column;
+}
+#sidebar.open { left: 0; }
+#sidebar-toggle {
+  position: fixed; top: 20px; left: 20px; z-index: 11000;
+  width: 45px; height: 45px; background: var(--panel); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px; color: var(--accent); display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 20px; pointer-events: all; transition: 0.3s ease;
+}
+#sidebar.open ~ #sidebar-toggle { left: 320px; }
 
-/* ── Right panel ── */
-#right{position:absolute;top:58px;right:20px;width:190px;
-  background:rgba(123,47,255,.03);border:1px solid rgba(123,47,255,.1);
-  border-radius:3px;padding:14px}
-#domain{font-size:9px;letter-spacing:3px;padding:3px 8px;margin-bottom:10px;
-  display:inline-block;border:1px solid rgba(123,47,255,.3);
-  color:rgba(123,47,255,.8);border-radius:1px}
-.alist{list-style:none}
-.aitem{font-size:9px;color:rgba(0,212,255,.35);padding:4px 0;
-  letter-spacing:1px;border-bottom:1px solid rgba(0,212,255,.05);
-  transition:color .3s}
-.aitem.on{color:#00FF88}
+.sidebar-label { font-size: 10px; letter-spacing: 2px; color: var(--accent); opacity: 0.6; margin-bottom: 10px; text-transform: uppercase; font-weight: bold; }
+#history-list { flex: 1; overflow-y: auto; scrollbar-width: none; margin-top: 10px; }
+.hist-item {
+  padding: 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-bottom: 8px;
+  background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center;
+  border: 1px solid transparent; transition: 0.2s;
+}
+.hist-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(45,226,201,0.2); }
+.hist-item.active { border-left: 3px solid var(--accent); background: rgba(45, 226, 201, 0.05); }
+.action-btn { opacity: 0.4; font-size: 12px; transition: 0.2s; }
+.action-btn:hover { opacity: 1; color: var(--danger); }
 
-/* ── Brain state (center) ── */
-#bstate{position:absolute;top:58px;left:50%;transform:translateX(-50%);
-  font-size:8px;letter-spacing:8px;color:rgba(0,212,255,.25);text-align:center}
+/* ── VOICE OVERLAY ── */
+#voice-overlay {
+  position: fixed; inset: 0; z-index: 100000; background: rgba(6, 7, 13, 0.92);
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  backdrop-filter: blur(20px); transition: 0.3s ease; pointer-events: all;
+}
+#voice-overlay.active { display: flex; }
+.voice-wave { display: flex; gap: 8px; height: 60px; align-items: center; margin-bottom: 30px; }
+.wave-bar { width: 5px; height: 20px; background: var(--accent); border-radius: 3px; animation: wave 1s infinite ease-in-out; }
+.wave-bar:nth-child(2) { animation-delay: 0.1s; }
+.wave-bar:nth-child(3) { animation-delay: 0.2s; }
+.wave-bar:nth-child(4) { animation-delay: 0.3s; }
+.wave-bar:nth-child(5) { animation-delay: 0.4s; }
+@keyframes wave { 0%, 100% { height: 20px; opacity: 0.3; } 50% { height: 60px; opacity: 1; box-shadow: 0 0 15px var(--accent); } }
+.voice-status { font-family: 'Syncopate'; font-size: 20px; letter-spacing: 4px; color: #fff; text-shadow: 0 0 20px var(--accent); }
 
-/* ── Insights ── */
-#insights{position:absolute;top:58px;right:224px;width:260px;
-  display:flex;flex-direction:column;gap:7px;pointer-events:none}
-.ins{padding:9px 12px;font-size:9px;letter-spacing:.5px;line-height:1.6;
-  border-radius:2px;backdrop-filter:blur(8px)}
-.ins-info{background:rgba(0,212,255,.05);border-left:2px solid rgba(0,212,255,.6);
-  color:rgba(0,212,255,.75)}
-.ins-learn{background:rgba(123,47,255,.05);border-left:2px solid rgba(123,47,255,.7);
-  color:rgba(123,47,255,.85)}
-.ins-ok{background:rgba(0,255,136,.05);border-left:2px solid rgba(0,255,136,.7);
-  color:rgba(0,255,136,.8)}
+/* ── MAIN CONTENT ── */
+#app { position: relative; z-index: 10; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; }
 
-/* ── Terminal ── */
-#terminal{position:absolute;bottom:0;left:0;right:0;
-  display:flex;align-items:center;gap:10px;padding:14px 24px;
-  background:rgba(2,4,8,.85);border-top:1px solid rgba(0,212,255,.08);
-  backdrop-filter:blur(12px);pointer-events:all}
-#prefix{font-size:11px;color:#00D4FF;letter-spacing:2px;flex-shrink:0}
-#input{flex:1;background:none;border:none;outline:none;
-  color:#00D4FF;font-family:'Courier New',monospace;font-size:13px;letter-spacing:1px}
-#input::placeholder{color:rgba(0,212,255,.18)}
-#sbtn{font-size:8px;letter-spacing:3px;color:rgba(0,212,255,.55);
-  background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.18);
-  padding:5px 12px;border-radius:2px;cursor:pointer;pointer-events:all;transition:all .2s}
-#sbtn:hover{background:rgba(0,212,255,.1);color:#00D4FF}
+#welcome {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; text-align: center; padding: 20px; transition: 0.5s ease;
+}
+#welcome.hide { display: none; }
+h1 { font-family: 'Syncopate'; font-size: 38px; color: #fff; margin-bottom: 15px; letter-spacing: 4px; }
 
-/* ── Drop zone ── */
-#dz{position:absolute;bottom:58px;left:50%;transform:translateX(-50%);
-  padding:10px 28px;border:1px dashed rgba(0,212,255,.15);border-radius:2px;
-  font-size:8px;letter-spacing:4px;color:rgba(0,212,255,.25);
-  pointer-events:all;cursor:default;transition:all .3s;z-index:10}
-#dz.over{border-color:rgba(0,212,255,.5);color:rgba(0,212,255,.7);
-  background:rgba(0,212,255,.04)}
+.chips { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 40px; }
+.chip { padding: 14px 24px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 25px; cursor: pointer; font-size: 14px; transition: 0.2s; color: #fff; }
+.chip:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-3px); }
 
-/* ── Voice indicator ── */
-#voice{position:absolute;bottom:62px;right:24px;
-  display:flex;align-items:center;gap:6px;
-  font-size:8px;letter-spacing:3px;color:rgba(0,212,255,.2)}
-#vbar{width:40px;height:1px;background:rgba(0,212,255,.1);overflow:hidden}
-#vfill{height:1px;background:#00FF88;width:0%;transition:width .05s}
+/* ── CHAT ── */
+#chat-container {
+  width: 100%; max-width: 850px; flex: 1; overflow-y: auto; display: none;
+  flex-direction: column; gap: 24px; padding: 100px 20px 180px; scrollbar-width: none;
+}
+#chat-container.active { display: flex; }
+.msg { max-width: 85%; padding: 18px 24px; border-radius: 20px; font-size: 16px; line-height: 1.6; animation: msgIn 0.4s ease-out; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+.user-msg { align-self: flex-end; background: var(--accent); color: #000; font-weight: 600; box-shadow: 0 8px 20px rgba(45,226,201,0.2); }
+.ai-msg { align-self: flex-start; background: #161821; border: 1px solid rgba(255,255,255,0.08); color: #eaf2f7; }
 
-/* ── Corners ── */
-.c{position:absolute;width:18px;height:18px;
-  border-color:rgba(0,212,255,.25);border-style:solid;border-width:0}
-.tl{top:54px;left:16px;border-top-width:1px;border-left-width:1px}
-.tr{top:54px;right:16px;border-top-width:1px;border-right-width:1px}
-.bl{bottom:54px;left:16px;border-bottom-width:1px;border-left-width:1px}
-.br{bottom:54px;right:16px;border-bottom-width:1px;border-right-width:1px}
+/* ── REFLECTION UI ── */
+#thinking { display: none; align-items: center; gap: 12px; padding: 20px; align-self: flex-start; }
+.dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.4s infinite ease-in-out; }
+.dot:nth-child(2) { animation-delay: 0.2s; }
+.dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.3; } 50% { transform: scale(1.5); opacity: 1; } }
+
+/* ── INPUT BOX ── */
+#input-wrapper {
+  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
+  width: min(850px, 92vw); z-index: 99999;
+}
+#input-box {
+  background: #1a1c26; border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 20px; padding: 10px 20px; display: flex; align-items: center; gap: 15px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.9); transition: 0.3s;
+}
+#input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 30px rgba(45,226,201,0.15); }
+#input { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 17px; font-family: inherit; padding: 10px 0; }
+.btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: none; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s; }
+.btn:hover { color: var(--accent); background: rgba(255,255,255,0.05); }
+.btn.active { color: var(--accent); background: rgba(45,226,201,0.1); border: 1px solid var(--accent); }
+#send-btn { background: var(--accent); color: #000; font-size: 24px; font-weight: bold; border-radius: 14px; }
+#send-btn.stop { background: var(--danger); color: #fff; font-size: 20px; }
+
 </style>
 </head>
 <body>
+
 <canvas id="c"></canvas>
-<div id="scanlines"></div>
-<div id="hud">
-  <div id="top">
-    <span class="logo">MAKENBRAIN</span>
-    <div class="dot"></div>
-    <span id="status">INITIALISATION...</span>
-    <span class="tag">IRONMAN v2.0</span>
-    <span id="clock">--:--:--</span>
+
+<div id="voice-overlay">
+  <div class="voice-wave">
+    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
   </div>
-  <div id="bstate">VEILLE COGNITIVE</div>
-  <div id="left">
-    <div class="ptitle">MÉMOIRE VECTORIELLE</div>
-    <div class="metric">
-      <div class="mlabel">SOUVENIRS</div>
-      <div class="mval" id="mc">—</div>
-      <div class="mbar"><div class="mfill" id="mb1"></div></div>
-    </div>
-    <div class="metric">
-      <div class="mlabel">NŒUDS GRAPHE</div>
-      <div class="mval" id="gn">—</div>
-      <div class="mbar"><div class="mfill" id="mb2" style="background:#7B2FFF"></div></div>
-    </div>
-    <div class="metric"><div class="mlabel">CONNEXIONS</div><div class="mval" id="ge">—</div></div>
-    <div class="metric"><div class="mlabel">DENSITÉ</div><div class="mval" id="gd">—</div></div>
-  </div>
-  <div id="right">
-    <div class="ptitle">DOMAINE ACTIF</div>
-    <div id="domain">GÉNÉRAL</div>
-    <div class="ptitle" style="margin-top:10px">PROCESSUS</div>
-    <ul class="alist">
-      <li class="aitem on" id="a0">▸ MÉMOIRE ACTIVE</li>
-      <li class="aitem" id="a1">▸ GRAPHE NEURONAL</li>
-      <li class="aitem" id="a2">▸ RECHERCHE WEB</li>
-      <li class="aitem" id="a3">▸ GROQ 70B</li>
-      <li class="aitem" id="a4">▸ AUTO-APPRENTISSAGE</li>
-    </ul>
-  </div>
-  <div id="insights"></div>
-  <div class="c tl"></div><div class="c tr"></div>
-  <div class="c bl"></div><div class="c br"></div>
-  <div id="terminal">
-    <span id="prefix">MAKEN ›</span>
-    <input id="input" type="text" placeholder="Demande à ton cerveau..." autocomplete="off">
-    <button id="sbtn">ENVOYER</button>
-  </div>
-  <div id="voice">MIC <div id="vbar"><div id="vfill"></div></div></div>
+  <div class="voice-status">CORTEX À L'ÉCOUTE...</div>
+  <p style="margin-top: 20px; opacity: 0.5; font-size: 12px; letter-spacing: 2px;">CLIQUEZ POUR INTERROMPRE</p>
 </div>
-<div id="dz">⬇ DÉPOSE DES FICHIERS</div>
+
+<div id="sidebar-toggle">☰</div>
+<div id="sidebar">
+  <div class="sidebar-header">MAKENBRAIN CORTEX</div>
+  
+  <div id="identity-panel" style="margin-bottom: 25px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(45,226,201,0.2);">
+    <div class="sidebar-label">👤 IDENTITÉ</div>
+    <div id="user-role" style="font-size: 12px; font-weight: bold; color: #fff;">Chargement...</div>
+    <div id="user-values" style="font-size: 10px; opacity: 0.6; margin-top: 5px;">...</div>
+    
+    <div class="sidebar-label" style="margin-top:20px;">📂 PROJETS</div>
+    <div id="active-projects-list" style="font-size: 11px;"></div>
+  </div>
+
+  <button id="new-chat-btn" style="width:100%; padding:14px; background:rgba(45, 226, 201, 0.1); border:1px solid var(--accent); border-radius:12px; color:var(--accent); cursor:pointer; font-weight:bold; margin-bottom:20px;">+ NOUVELLE SESSION</button>
+  <div class="sidebar-label" style="opacity:0.4">HISTORIQUE</div>
+  <div id="history-list"></div>
+</div>
+
+<div id="app">
+  <div id="welcome">
+    <h1 id="greet">Bonjour, MAKEN.</h1>
+    <p style="opacity:0.6; letter-spacing:1px">Comment puis-je assister ton génie aujourd'hui ?</p>
+    <div class="chips">
+      <div class="chip" data-prompt="Quelles sont les priorités sur le projet ITAG ?">📂 Projet ITAG</div>
+      <div class="chip" data-prompt="Analyse l'architecture de mon projet MakenBrain.">🧠 Analyse Système</div>
+      <div class="chip" data-prompt="Génère une image ultra-réaliste futuriste.">🎨 Générer Image</div>
+      <div class="chip" data-prompt="Crée une courte vidéo d'une nébuleuse.">🎬 Générer Vidéo</div>
+    </div>
+  </div>
+
+  <div id="chat-container"></div>
+
+  <div id="thinking">
+    <div style="display:flex; gap:6px;"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <span id="thinking-text" style="font-size:13px; font-weight:bold; color:var(--accent); text-transform:uppercase; margin-left:10px;">Analyse neuronale...</span>
+  </div>
+
+  <div id="ingest-progress">
+    <div style="font-size:10px; letter-spacing:1px; color:var(--accent)">INGESTION NEURONALE...</div>
+    <div id="ingest-filename" style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.6">Fichier.pdf</div>
+    <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+  </div>
+
+  <div id="input-wrapper">
+    <div id="import-dropdown">
+      <div class="import-opt" onclick="triggerFile('all')">📄 Fichiers</div>
+      <div class="import-opt" onclick="triggerFile('folder')">📁 Dossier</div>
+      <div class="import-opt" onclick="triggerFile('media')">🖼️ Images / Vidéos</div>
+      <div class="import-opt" onclick="triggerFile('zip')">📦 Archive ZIP</div>
+    </div>
+    <div id="input-box">
+      <button class="btn" id="voice-toggle" title="Réponse Audio Automatique">🗣️</button>
+      <button class="btn" id="attach-btn">📎</button>
+      <input type="file" id="file-all" multiple hidden>
+      <input type="file" id="file-folder" webkitdirectory mozdirectory directory multiple hidden>
+      <input type="file" id="file-media" accept="image/*,video/*" multiple hidden>
+      <input type="file" id="file-zip" accept=".zip" hidden>
+      
+      <input type="text" id="input" placeholder="Envoyer un message au Cortex..." autofocus autocomplete="off">
+      <button class="btn" id="mic-btn">🎙️</button>
+      <button class="btn" id="send-btn">↑</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script>
-// ═══════════════════════════════════════════════
-//  MAKENBRAIN — IRONMAN v2.0
-//  Three.js + GLSL Shaders + Web Audio API
-// ═══════════════════════════════════════════════
 const API = 'http://localhost:8000';
+let currentSession = localStorage.getItem('mb_session');
+let voiceAlwaysOn = localStorage.getItem('mb_voice_on') === 'true';
+let isThinking = false;
+let isRecording = false;
+let abortController = null;
 
-// ── État global ──────────────────────────────
-const S = {
-  state:'idle', activity:0, color:new THREE.Color(0x00D4FF),
-  memories:0, nodes:0, edges:0, density:0,
-};
-const COLS = {
-  idle:       new THREE.Color(0x00D4FF),
-  thinking:   new THREE.Color(0xCCEEFF),
-  learning:   new THREE.Color(0x7B2FFF),
-  analyzing:  new THREE.Color(0xFF6B2B),
-  responding: new THREE.Color(0x00FF88),
-};
-
-// ── Three.js ──────────────────────────────────
-const canvas = document.getElementById('c');
-const WW = ()=>innerWidth, HH = ()=>innerHeight;
-const renderer = new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
-renderer.setPixelRatio(Math.min(devicePixelRatio,2));
-renderer.setSize(WW(),HH());
-renderer.setClearColor(0x020408,1);
-
-const scene  = new THREE.Scene();
-scene.fog    = new THREE.FogExp2(0x020408,0.06);
-const camera = new THREE.PerspectiveCamera(60,WW()/HH(),0.1,100);
-camera.position.z = 5;
-
-// ── Shaders GLSL ──────────────────────────────
-const VS = `
-uniform float T; uniform float ACT; uniform float BST;
-varying vec3 vN; varying float vNoise;
-float h(vec3 p){return fract(sin(dot(p,vec3(12.98,78.23,45.16)))*43758.5);}
-float sn(vec3 p){
-  vec3 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);
-  return mix(mix(mix(h(i),h(i+vec3(1,0,0)),f.x),mix(h(i+vec3(0,1,0)),h(i+vec3(1,1,0)),f.x),f.y),
-             mix(mix(h(i+vec3(0,0,1)),h(i+vec3(1,0,1)),f.x),mix(h(i+vec3(0,1,1)),h(i+vec3(1,1,1)),f.x),f.y),f.z);
-}
-void main(){
-  vN=normal;
-  float n=sn(position*2.+T*.15)+sn(position*4.-T*.1)*.5;
-  float disp=n*.1*(1.+ACT*1.8)+BST*.4;
-  vNoise=n; vec3 p=position+normal*disp;
-  gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);
-}`;
-
-const FS = `
-uniform float T; uniform float ACT; uniform vec3 COL;
-varying vec3 vN; varying float vNoise;
-void main(){
-  float fr=pow(1.-abs(dot(normalize(vN),vec3(0,0,1))),2.2);
-  vec3 c=COL*(1.+vNoise*.4+fr*.6)*(sin(T*1.2)*.1+.9)*(1.+ACT*.4);
-  float a=mix(.03,.95,fr)*(ACT*.15+.85);
-  gl_FragColor=vec4(c,a);
-}`;
-
-const bGeo = new THREE.SphereGeometry(1.4,64,64);
-const bMat = new THREE.ShaderMaterial({
-  vertexShader:VS, fragmentShader:FS,
-  uniforms:{T:{value:0},ACT:{value:0},BST:{value:0},COL:{value:new THREE.Color(0x00D4FF)}},
-  transparent:true, side:THREE.DoubleSide, depthWrite:false,
-});
-const brain = new THREE.Mesh(bGeo,bMat);
-scene.add(brain);
-
-// ── Particules surface ────────────────────────
-const NP=2500, pGeo=new THREE.BufferGeometry();
-const pp=new Float32Array(NP*3);
-for(let i=0;i<NP;i++){
-  const ph=Math.acos(1-2*i/NP), th=Math.PI*(1+Math.sqrt(5))*i;
-  const r=1.46+(Math.random()-.5)*.08;
-  pp[i*3]=r*Math.sin(ph)*Math.cos(th);
-  pp[i*3+1]=r*Math.cos(ph);
-  pp[i*3+2]=r*Math.sin(ph)*Math.sin(th);
-}
-pGeo.setAttribute('position',new THREE.BufferAttribute(pp,3));
-const pMat=new THREE.PointsMaterial({color:0x00D4FF,size:.022,transparent:true,opacity:.65,depthWrite:false,sizeAttenuation:true});
-const pts=new THREE.Points(pGeo,pMat);
-scene.add(pts);
-
-// ── Anneaux orbitaux ──────────────────────────
-function ring(r,rx,ry,rz,col,op=.3){
-  const m=new THREE.Mesh(new THREE.TorusGeometry(r,.004,2,200),
-    new THREE.MeshBasicMaterial({color:col,transparent:true,opacity:op}));
-  m.rotation.set(rx,ry,rz); scene.add(m); return m;
-}
-const r1=ring(2.2,Math.PI/3,0,0,0x00D4FF);
-const r2=ring(2.5,0,Math.PI/4,Math.PI/5,0x7B2FFF,.25);
-const r3=ring(2.8,Math.PI/2,0,Math.PI/3,0x00FF88,.2);
-
-// ── Particules ambiantes ──────────────────────
-const aGeo=new THREE.BufferGeometry();
-const ap=new Float32Array(500*3);
-for(let i=0;i<500;i++){
-  ap[i*3]=(Math.random()-.5)*22;
-  ap[i*3+1]=(Math.random()-.5)*22;
-  ap[i*3+2]=(Math.random()-.5)*22;
-}
-aGeo.setAttribute('position',new THREE.BufferAttribute(ap,3));
-scene.add(new THREE.Points(aGeo,new THREE.PointsMaterial({color:0x002244,size:.05,transparent:true,opacity:.25,depthWrite:false})));
-
-// ── Lumières ──────────────────────────────────
-const pl=new THREE.PointLight(0x00D4FF,2,12);
-pl.position.set(3,3,3); scene.add(pl);
-scene.add(new THREE.AmbientLight(0x001122,.4));
-
-// ── Interactivité ─────────────────────────────
-let mx=0,my=0,voiceL=0,keyAct=0,burstT=null;
-
-window.addEventListener('mousemove',e=>{
-  mx=(e.clientX/WW()-.5)*2; my=-(e.clientY/HH()-.5)*2;
-});
-
-document.addEventListener('keydown',e=>{
-  if(e.target.id==='input'){
-    keyAct=1; burst(.45);
-    setState('thinking');
-    clearTimeout(burstT);
-    burstT=setTimeout(()=>{keyAct=0;setState('idle');},2500);
-  }
-});
-
-function burst(v){
-  gsap.to(bMat.uniforms.BST,{value:v,duration:.06,
-    onComplete:()=>gsap.to(bMat.uniforms.BST,{value:0,duration:1.4,ease:'power2.out'})});
-}
-
-// ── Web Audio (voix) ──────────────────────────
-let analyser,aData;
-async function initMic(){
-  try{
-    const s=await navigator.mediaDevices.getUserMedia({audio:true,video:false});
-    const ac=new AudioContext();
-    analyser=ac.createAnalyser(); analyser.fftSize=256;
-    ac.createMediaStreamSource(s).connect(analyser);
-    aData=new Uint8Array(analyser.frequencyBinCount);
-    showIns('🎤 Microphone connecté — réactivité vocale active','ok');
-  }catch(e){showIns('🎤 Microphone non disponible','info');}
-}
-document.addEventListener('click',()=>{if(!analyser)initMic();},{once:true});
-
-function getVoice(){
-  if(!analyser)return 0;
-  analyser.getByteFrequencyData(aData);
-  return Math.min(aData.reduce((a,b)=>a+b,0)/aData.length/75,1);
-}
-
-// ── État cerveau ──────────────────────────────
-const STATE_LABELS={
-  idle:'VEILLE COGNITIVE',thinking:'TRAITEMENT EN COURS',
-  learning:'APPRENTISSAGE ACTIF',analyzing:'ANALYSE APPROFONDIE',
-  responding:'FORMULATION RÉPONSE',
-};
-function setState(s){
-  if(S.state===s)return; S.state=s;
-  const c=COLS[s]||COLS.idle;
-  gsap.to(bMat.uniforms.COL.value,{r:c.r,g:c.g,b:c.b,duration:.7});
-  gsap.to(pMat.color,{r:c.r,g:c.g,b:c.b,duration:.7});
-  gsap.to(pl.color,{r:c.r,g:c.g,b:c.b,duration:.7});
-  document.getElementById('bstate').textContent=STATE_LABELS[s]||s.toUpperCase();
-}
-
-// ── Animation loop ────────────────────────────
-let T=0;
-(function loop(){
-  requestAnimationFrame(loop); T+=.016;
-  voiceL=getVoice();
-  document.getElementById('vfill').style.width=(voiceL*100)+'%';
-  if(voiceL>.12){setState('thinking');S.activity=Math.max(S.activity,voiceL);}
-  const tAct=Math.max(voiceL,keyAct*.6);
-  S.activity+=(tAct-S.activity)*.05;
-  bMat.uniforms.T.value=T;
-  bMat.uniforms.ACT.value=S.activity;
-  brain.rotation.y=T*.04; brain.rotation.x=Math.sin(T*.025)*.08;
-  camera.position.x+=(mx*.7-camera.position.x)*.025;
-  camera.position.y+=(my*.35-camera.position.y)*.025;
-  camera.lookAt(0,0,0);
-  r1.rotation.z+=.002; r2.rotation.x+=.0013; r3.rotation.y+=.001;
-  pts.scale.setScalar(1+Math.sin(T*1.1)*.012+S.activity*.07);
-  pts.rotation.y=T*.018;
-  renderer.render(scene,camera);
+// INIT GREETING
+(function(){
+  const hr = new Date().getHours();
+  document.getElementById('greet').textContent = `${hr < 5 || hr >= 18 ? 'Bonsoir' : hr < 12 ? 'Bonjour' : 'Bon retour'}, MAKEN.`;
 })();
 
-window.addEventListener('resize',()=>{
-  camera.aspect=WW()/HH(); camera.updateProjectionMatrix();
-  renderer.setSize(WW(),HH());
-});
+const input = document.getElementById('input');
+const chat = document.getElementById('chat-container');
+const welcome = document.getElementById('welcome');
+const voiceBtn = document.getElementById('voice-toggle');
+const sendBtn = document.getElementById('send-btn');
+const thinkingUI = document.getElementById('thinking');
+const voiceOverlay = document.getElementById('voice-overlay');
 
-// ── Insights ──────────────────────────────────
-const insEl=document.getElementById('insights');
-function showIns(text,type='info'){
-  const d=document.createElement('div');
-  d.className=`ins ins-${type}`; d.textContent=text;
-  insEl.prepend(d);
-  gsap.from(d,{x:30,opacity:0,duration:.35,ease:'power2.out'});
-  while(insEl.children.length>5){
-    const old=insEl.lastChild;
-    gsap.to(old,{opacity:0,duration:.25,onComplete:()=>old.remove()});
-  }
-  setTimeout(()=>{
-    if(d.parentNode)gsap.to(d,{x:30,opacity:0,duration:.3,onComplete:()=>d.remove()});
-  },8000);
+if(voiceAlwaysOn) voiceBtn.classList.add('active');
+
+function startChatUI() {
+  welcome.classList.add('hide');
+  chat.classList.add('active');
 }
 
-// ── Horloge ───────────────────────────────────
-setInterval(()=>{
-  document.getElementById('clock').textContent=
-    new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
-},1000);
-
-// ── API MakenBrain ────────────────────────────
-let connected=false;
-async function fetchStats(){
-  try{
-    const [m,g]=await Promise.all([
-      fetch(`${API}/memory/stats`).then(r=>r.json()),
-      fetch(`${API}/graph/stats`).then(r=>r.json()),
-    ]);
-    document.getElementById('mc').textContent=(m.total_memories||0).toLocaleString();
-    document.getElementById('gn').textContent=(g.nodes||0).toLocaleString();
-    document.getElementById('ge').textContent=(g.edges||0).toLocaleString();
-    document.getElementById('gd').textContent=(g.density||0).toFixed(4);
-    document.getElementById('mb1').style.width=Math.min((m.total_memories||0)/2000*100,100)+'%';
-    document.getElementById('mb2').style.width=Math.min((g.nodes||0)/500*100,100)+'%';
-    const top=(g.top_concepts||[])[0];
-    if(top)document.getElementById('domain').textContent=top.concept.toUpperCase().slice(0,14);
-    if(!connected){
-      connected=true;
-      document.getElementById('status').textContent='CONNECTÉ · ACTIF';
-      showIns(`🧠 Cerveau connecté — ${m.total_memories||0} souvenirs chargés`,'ok');
-    }
-  }catch(e){
-    if(connected){connected=false;document.getElementById('status').textContent='HORS LIGNE';}
-  }
-}
-fetchStats(); setInterval(fetchStats,10000);
-
-// ── Activity pulse (UI) ───────────────────────
-function pulse(id){
-  const el=document.getElementById(id);
-  if(!el)return;
-  el.classList.add('on');
-  setTimeout(()=>el.classList.remove('on'),3000);
+function addMsg(txt, isAi) {
+  startChatUI();
+  const div = document.createElement('div');
+  div.className = `msg ${isAi ? 'ai-msg' : 'user-msg'}`;
+  div.textContent = txt;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
 }
 
-// ── Terminal ──────────────────────────────────
-const inp=document.getElementById('input');
-async function send(){
-  const msg=inp.value.trim(); if(!msg)return;
-  inp.value='';
-  setState('thinking'); burst(.6);
-  showIns(`▸ ${msg.slice(0,55)}${msg.length>55?'...':''}`, 'info');
-  pulse('a0'); pulse('a3');
-  try{
-    const r=await fetch(`${API}/chat/`,{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:msg,use_memory:true,use_graph:true,provider:'groq'}),
+async function send(requestedByVoice = false) {
+  if(isThinking) { stopThinking(); return; }
+  const val = input.value.trim();
+  if(!val) return;
+  
+  speechSynthesis.cancel();
+  addMsg(val, false);
+  input.value = '';
+  
+  isThinking = true;
+  thinkingUI.style.display = 'flex';
+  sendBtn.innerHTML = '■';
+  sendBtn.classList.add('stop');
+  
+  abortController = new AbortController();
+
+  try {
+    const res = await fetch(`${API}/chat/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ message: val, session_id: currentSession, use_memory: true }),
+      signal: abortController.signal
     });
-    const d=await r.json();
-    setState('responding'); burst(.85); pulse('a0');
-    showIns(`🧠 ${(d.response||'').slice(0,130)}...`,'ok');
-    if(d.domain_detected){
-      document.getElementById('domain').textContent=d.domain_detected.toUpperCase().slice(0,14);
-      showIns(`📡 Domaine : ${d.domain_detected}`,'learn');
-      pulse('a4');
+    const data = await res.json();
+    stopThinking();
+    if(data.session_id) { 
+      currentSession = data.session_id; 
+      localStorage.setItem('mb_session', data.session_id); 
+      loadHistory();
     }
-    setTimeout(()=>setState('idle'),4000);
-  }catch(e){
-    showIns('❌ API non disponible','info'); setState('idle');
-  }
+    addMsg(data.response, true);
+    if(requestedByVoice || voiceAlwaysOn) speak(data.response);
+  } catch(e) { if(e.name !== 'AbortError') addMsg("Liaison interrompue.", true); stopThinking(); }
 }
-document.getElementById('sbtn').addEventListener('click',send);
-inp.addEventListener('keydown',e=>e.key==='Enter'&&send());
 
-// ── Drag & Drop ───────────────────────────────
-const dz=document.getElementById('dz');
-dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('over');setState('analyzing');burst(.4);});
-dz.addEventListener('dragleave',()=>{dz.classList.remove('over');setState('idle');});
-dz.addEventListener('drop',async e=>{
-  e.preventDefault(); dz.classList.remove('over');
-  const files=[...e.dataTransfer.files];
-  setState('learning'); burst(1); pulse('a4');
-  showIns(`📂 ${files.length} fichier(s) reçu(s) — ingestion...`,'learn');
-  setTimeout(()=>{setState('idle');fetchStats();showIns(`✅ Ingestion terminée`,'ok');},3000);
-});
+function stopThinking() {
+  isThinking = false;
+  thinkingUI.style.display = 'none';
+  sendBtn.innerHTML = '↑';
+  sendBtn.classList.remove('stop');
+  if(abortController) abortController.abort();
+  speechSynthesis.cancel();
+}
 
-// ── Auto-insights ─────────────────────────────
-const AUTOS=[
-  '🔬 Consolidation des liens neuronaux...',
-  '💡 Nouveau concept extrait du graphe',
-  '🌐 Veille technologique en cours',
-  '📊 Mémoire vectorielle optimisée',
-  '🔗 Connexion inter-domaines établie',
-  '⚡ Recherche autonome lancée en arrière-plan',
-];
-let ai=0;
-setInterval(()=>{if(Math.random()<.35){showIns(AUTOS[ai++%AUTOS.length],'learn');}},18000);
+// AUDIO ENGINE
+function speak(txt) {
+  if(!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(txt);
+  u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.95;
+  speechSynthesis.speak(u);
+}
 
-// ── Init ──────────────────────────────────────
-setTimeout(()=>showIns('🧠 MakenBrain Ironman v2.0 — En ligne, MAKEN.','ok'),800);
-setTimeout(()=>showIns('💡 Clique sur l\'écran pour activer le microphone','info'),2200);
+voiceBtn.onclick = () => {
+  voiceAlwaysOn = !voiceAlwaysOn;
+  localStorage.setItem('mb_voice_on', voiceAlwaysOn);
+  voiceBtn.classList.toggle('active');
+};
+
+// VOICE RECOGNITION
+let rec;
+if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  rec = new SpeechRecognition();
+  rec.lang = 'fr-FR';
+  rec.continuous = false;
+  rec.onstart = () => { isRecording = true; voiceOverlay.classList.add('active'); };
+  rec.onend = () => { isRecording = false; voiceOverlay.classList.remove('active'); };
+  rec.onresult = (e) => { input.value = e.results[0][0].transcript; send(true); };
+  rec.onerror = () => { isRecording = false; voiceOverlay.classList.remove('active'); };
+}
+document.getElementById('mic-btn').onclick = () => { 
+  if(isRecording) rec.stop(); else try{rec.start()}catch(e){rec.stop()} 
+};
+voiceOverlay.onclick = () => rec.stop();
+
+sendBtn.onclick = () => send(false);
+input.onkeydown = (e) => { if(e.key === 'Enter') send(false); };
+
+// SIDEBAR & HISTORY
+const sidebar = document.getElementById('sidebar');
+const sideToggle = document.getElementById('sidebar-toggle');
+sideToggle.onclick = () => {
+  sidebar.classList.toggle('open');
+  sideToggle.textContent = sidebar.classList.contains('open') ? '✕' : '☰';
+  if(sidebar.classList.contains('open')) loadHistory();
+};
+
+async function loadHistory() {
+  try {
+    const r = await fetch(`${API}/history/list`);
+    const d = await r.json();
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    d.sessions.forEach(s => {
+      const item = document.createElement('div');
+      item.className = 'hist-item' + (s.id === currentSession ? ' active' : '');
+      item.innerHTML = `<div style="flex:1; overflow:hidden; text-overflow:ellipsis;">${s.topic || "Conversation"}</div>
+                        <div class="actions" onclick="deleteSession(event, '${s.id}')">🗑️</div>`;
+      item.onclick = () => loadSession(s.id);
+      list.appendChild(item);
+    });
+    loadIdentity();
+  } catch(e) {}
+}
+
+async function loadIdentity() {
+  try {
+    const [prof, proj] = await Promise.all([
+      fetch(`${API}/identity/profile`).then(r => r.json()),
+      fetch(`${API}/identity/projects`).then(r => r.json())
+    ]);
+    document.getElementById('user-role').textContent = prof.role;
+    document.getElementById('user-values').textContent = prof.core_values.join(' • ');
+    const pList = document.getElementById('active-projects-list');
+    pList.innerHTML = proj.length ? '' : '<div style="opacity:0.3">Aucun projet</div>';
+    proj.forEach(p => { pList.innerHTML += `<div style="padding:4px 0"><span style="color:var(--accent)">▹</span> ${p.name}</div>`; });
+  } catch(e) {}
+}
+
+async function loadSession(id) {
+  currentSession = id; localStorage.setItem('mb_session', id);
+  sidebar.classList.remove('open'); sideToggle.textContent = '☰';
+  chat.innerHTML = '';
+  startChatUI();
+  try {
+    const r = await fetch(`${API}/history/${id}`);
+    const d = await r.json();
+    d.messages.forEach(m => addMsg(m.content, m.role !== 'user'));
+  } catch(e) {}
+}
+
+async function deleteSession(e, id) {
+  e.stopPropagation();
+  if(!confirm("Supprimer ?")) return;
+  await fetch(`${API}/history/${id}`, { method: 'DELETE' });
+  if(currentSession === id) newChat(); else loadHistory();
+}
+
+function newChat() {
+  currentSession = null; localStorage.removeItem('mb_session');
+  chat.innerHTML = ''; chat.classList.remove('active');
+  welcome.classList.remove('hide'); sidebar.classList.remove('open');
+  sideToggle.textContent = '☰'; input.focus();
+}
+document.getElementById('new-chat-btn').onclick = newChat;
+
+// ── 3D ENGINE (CINEMATIC NEURAL PLANET) ──
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.z = 6;
+const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('c'), antialias:true, alpha:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+
+const brain = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 5), new THREE.MeshPhongMaterial({color: 0x2de2c9, wireframe: true, transparent: true, opacity: 0.15}));
+scene.add(brain);
+
+const particleCount = 1000;
+const pGeo = new THREE.BufferGeometry();
+const pPos = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount; i++) {
+  const r = 2.5 + Math.random() * 2.5;
+  const t = Math.random() * Math.PI * 2;
+  const p = Math.acos((Math.random() * 2) - 1);
+  pPos[i*3] = r * Math.sin(p) * Math.cos(t);
+  pPos[i*3+1] = r * Math.sin(p) * Math.sin(t);
+  pPos[i*3+2] = r * Math.cos(p);
+}
+pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0x2de2c9, size: 0.02, transparent: true, opacity: 0.5}));
+scene.add(particles);
+
+const light = new THREE.PointLight(0x2de2c9, 2, 15);
+light.position.set(5, 5, 5); scene.add(light);
+scene.add(new THREE.AmbientLight(0x0a0a10));
+
+function animate() { 
+  requestAnimationFrame(animate); 
+  const speed = isThinking ? 0.015 : 0.002;
+  brain.rotation.y += speed; 
+  particles.rotation.y -= speed * 0.5;
+  renderer.render(scene, camera); 
+}
+animate();
+
+window.onresize = () => {
+  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+};
+
+window.onload = () => { if(currentSession) loadSession(currentSession); else input.focus(); loadIdentity(); };
 </script>
 </body>
 </html>

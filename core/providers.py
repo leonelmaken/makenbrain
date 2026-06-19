@@ -71,11 +71,12 @@ async def groq_generate(
     prompt: str,
     context: str = "",
     model: str = GROQ_MODEL,
-    system_prompt: str = None
-) -> str:
+    system_prompt: str = None,
+    stream: bool = False
+):
     """
     Génère une réponse via Groq (Llama 3.3 70B).
-    20x plus puissant que llama3.2:3b, répond en < 3 secondes.
+    Supporte le streaming si stream=True.
     """
     client = _groq_client()
     messages = []
@@ -94,13 +95,22 @@ async def groq_generate(
 
     messages.append({"role": "user", "content": prompt})
 
-    response = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "system", "content": current_system}] + messages,
-        temperature=0.7,
-        max_tokens=2048,
-    )
-    return response.choices[0].message.content
+    if stream:
+        return client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": current_system}] + messages,
+            temperature=0.7,
+            max_tokens=2048,
+            stream=True
+        )
+    else:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": current_system}] + messages,
+            temperature=0.7,
+            max_tokens=2048,
+        )
+        return response.choices[0].message.content
 
 
 async def check_groq() -> dict:

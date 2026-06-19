@@ -4,9 +4,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-
+from routers import chat_history
 from core.memory import init_memory
-from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain
+from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain, video, identity
 
 try:
     from routers import graph
@@ -57,6 +57,13 @@ static_dir = Path("static")
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Monter les outputs
+outputs_dir = Path("brain_data/outputs")
+outputs_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static/outputs", StaticFiles(directory="brain_data/outputs"), name="outputs")
+
+app.include_router(chat_history.router, prefix="/history", tags=["📜 Historique"])
+app.include_router(identity.router, prefix="/identity", tags=["👤 Identité & Projets"])
 app.include_router(chat.router,     prefix="/chat",     tags=["💬 Chat"])
 app.include_router(memory.router,   prefix="/memory",   tags=["💾 Mémoire"])
 app.include_router(ingest.router,   prefix="/ingest",   tags=["📥 Ingestion"])
@@ -66,6 +73,7 @@ app.include_router(providers.router,prefix="/providers",tags=["🔌 Connecteurs 
 app.include_router(agent.router,    prefix="/agent",    tags=["🤖 Agent Fichiers"])
 app.include_router(analysis.router, prefix="/analysis", tags=["🔍 Analyse & Validation"])
 app.include_router(brain.router,    prefix="/brain",    tags=["🧠 Expertise & Autonomie"])
+app.include_router(video.router,    prefix="/video",    tags=["🎬 Génération Vidéo"])
 
 if GRAPH_AVAILABLE:
     app.include_router(graph.router, prefix="/graph", tags=["🕸️ Graphe de Neurones"])
@@ -81,11 +89,11 @@ def root():
         "phases_complete": ["1-Foundation", "2-Ingestion+Web", "3-Graph",
                             "4-FileAgent+Analysis", "5-Autonomy+Expertise"],
         "quick_start": {
-            "1_domains":     "GET  /brain/list            → voir les domaines disponibles",
-            "2_explore":     "POST /brain/explore         → devenir expert dans un domaine",
-            "3_expert_chat": "POST /brain/expert-chat     → réponse d'expert comme Perplexity",
-            "4_scheduler":   "POST /brain/scheduler/configure → activer l'autonomie",
-            "5_report":      "POST /brain/scheduler/report-now → rapport immédiat",
-            "6_visualize":   "GET  /static/brain_map.html → visualiser le graphe",
+            "1_domains":     "GET  /brain/list            - voir les domaines disponibles",
+            "2_explore":     "POST /brain/explore         - devenir expert dans un domaine",
+            "3_expert_chat": "POST /brain/expert-chat     - réponse d'expert comme Perplexity",
+            "4_scheduler":   "POST /brain/scheduler/configure - activer l'autonomie",
+            "5_report":      "POST /brain/scheduler/report-now - rapport immédiat",
+            "6_visualize":   "GET  /static/brain_map.html - visualiser le graphe",
         },
     }

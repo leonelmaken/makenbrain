@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MakenBrain v5 — JARVIS SUPREME</title>
+<style>
+:root {
+  --neon: #00f2ff;
+  --purple: #7000ff;
+  --bg: #020205;
+  --glass: rgba(10, 20, 40, 0.7);
+  --border: rgba(0, 242, 255, 0.2);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;font-family: 'Segoe UI', sans-serif;}
+body{background: var(--bg); color:#fff; overflow:hidden; width:100vw; height:100vh;}
+
+/* --- BACKGROUND & THREE --- */
+#canvas-container {position:fixed;inset:0;z-index:1;}
+#vignette {position:fixed;inset:0;z-index:2;pointer-events:none;
+  background: radial-gradient(circle at center, transparent 30%, rgba(2,2,5,0.8) 100%);
+  box-shadow: inset 0 0 150px #000;
+}
+
+/* --- HUD GLASS --- */
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  box-shadow: 0 0 30px rgba(0, 242, 255, 0.1);
+  pointer-events: all;
+  border-radius: 15px;
+}
+
+/* --- TOP BAR --- */
+#top-bar {
+  position: absolute; top: 20px; left: 20px; right: 20px; height: 60px;
+  display: flex; align-items: center; padding: 0 25px; z-index: 10;
+}
+.status-indicator { display: flex; align-items: center; gap: 10px; font-size: 12px; letter-spacing: 2px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 10px var(--neon); }
+.clock { margin-left: auto; font-family: monospace; font-size: 18px; color: var(--neon); text-shadow: 0 0 10px var(--neon); }
+
+/* --- SIDE PANELS --- */
+.panel { position: absolute; width: 280px; padding: 20px; z-index: 10; opacity: 0; }
+#panel-left { top: 100px; left: 20px; }
+#panel-right { top: 100px; right: 20px; }
+
+.panel-h { font-size: 10px; letter-spacing: 4px; color: var(--neon); opacity: 0.7; margin-bottom: 15px; text-transform: uppercase; }
+.stat-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
+.stat-val { font-weight: bold; font-family: monospace; color: #fff; }
+
+/* --- CHAT AREA (The transparent window) --- */
+#chat-window {
+  position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+  width: min(600px, 90%); height: calc(100vh - 280px);
+  padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px;
+  scrollbar-width: thin; scrollbar-color: var(--neon) transparent;
+  z-index: 5;
+}
+#chat-window::-webkit-scrollbar { width: 4px; }
+#chat-window::-webkit-scrollbar-thumb { background: var(--neon); border-radius: 10px; }
+
+.msg { max-width: 85%; padding: 12px 18px; border-radius: 15px; font-size: 14px; line-height: 1.5; position: relative; animation: fadeIn 0.3s ease; }
+.msg-user { align-self: flex-end; background: rgba(0, 242, 255, 0.1); border: 1px solid var(--neon); color: var(--neon); border-bottom-right-radius: 2px; }
+.msg-ai { align-self: flex-start; background: rgba(112, 0, 255, 0.1); border: 1px solid var(--purple); color: #fff; border-bottom-left-radius: 2px; }
+
+/* --- TERMINAL (INPUT) --- */
+#terminal-bar {
+  position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%);
+  width: min(800px, 90%); height: 70px; display: flex; align-items: center; gap: 15px;
+  padding: 0 15px 0 25px; z-index: 100; border-radius: 35px;
+}
+#user-input {
+  flex: 1; background: none; border: none; outline: none; color: #fff;
+  font-size: 16px; letter-spacing: 0.5px;
+}
+
+.btn-circle {
+  width: 45px; height: 45px; border-radius: 50%; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: 0.3s;
+  background: rgba(255,255,255,0.05); color: #fff;
+}
+.btn-circle:hover { background: rgba(0,242,255,0.2); transform: scale(1.1); }
+#mic-btn.active { background: rgba(255,0,0,0.3); color: #ff4444; box-shadow: 0 0 20px #ff4444; }
+
+#send-btn { background: var(--neon); color: #000; }
+
+/* --- WAVEFORM ANIMATION --- */
+#waveform {
+  position: absolute; bottom: 70px; left: 50%; transform: translateX(-50%);
+  display: none; align-items: center; gap: 3px; height: 20px; z-index: 90;
+}
+.wave-bar { width: 3px; height: 4px; background: var(--neon); border-radius: 2px; }
+
+/* --- SIDEBAR HISTORY --- */
+#history-sidebar {
+  position: fixed; top: 0; left: -350px; bottom: 0; width: 320px;
+  z-index: 200; padding: 40px 20px; transition: 0.5s cubic-bezier(0.1, 0.9, 0.2, 1);
+}
+#history-sidebar.open { left: 0; }
+.hist-item { 
+  padding: 15px; margin-bottom: 12px; border-radius: 12px; background: rgba(255,255,255,0.04);
+  cursor: pointer; transition: 0.3s; border: 1px solid transparent;
+}
+.hist-item:hover { background: rgba(0,242,255,0.08); border-color: var(--neon); }
+.hist-topic { font-weight: bold; font-size: 13px; color: var(--neon); }
+.hist-meta { font-size: 10px; opacity: 0.5; margin-top: 5px; }
+
+/* --- FILE PREVIEW --- */
+#file-preview {
+  position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+  background: var(--glass); padding: 10px 20px; border-radius: 10px;
+  display: none; align-items: center; gap: 10px; font-size: 12px; z-index: 80;
+}
+
+/* --- ANIMATIONS --- */
+@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+<div id="vignette"></div>
+
+<div id="hud">
+  <!-- Top Bar -->
+  <div id="top-bar" class="glass">
+    <button id="toggle-menu" style="background:none; border:none; color:var(--neon); font-size:24px; cursor:pointer; margin-right:20px;">☰</button>
+    <div class="status-indicator">
+      <div class="dot"></div>
+      <span>SYSTEM ACTIVE // CORE STABLE</span>
+    </div>
+    <div class="clock" id="clock">00:00:00</div>
+  </div>
+
+  <!-- Panels -->
+  <div id="panel-left" class="panel glass">
+    <div class="panel-h">Neural Memory</div>
+    <div class="stat-row"><span>Souvenirs</span> <span class="stat-val" id="stat-mem">0</span></div>
+    <div class="stat-row"><span>Graphe</span> <span class="stat-val" id="stat-graph">0</span></div>
+    <div style="height: 1px; background: var(--border); margin: 15px 0;"></div>
+    <div class="panel-h">Cortex Stats</div>
+    <div class="stat-row"><span>Latence</span> <span class="stat-val">12ms</span></div>
+    <div class="stat-row"><span>Précision</span> <span class="stat-val">98.4%</span></div>
+  </div>
+
+  <div id="panel-right" class="panel glass">
+    <div class="panel-h">Active Domain</div>
+    <div id="domain-pill" style="padding: 10px; border: 1px solid var(--neon); border-radius: 5px; text-align: center; font-size: 11px;">GÉNÉRAL</div>
+    <div style="margin-top:20px" class="panel-h">Tools</div>
+    <div style="font-size: 11px; opacity: 0.6;">
+      > Web Search: [ON]<br>
+      > File Agent: [ON]<br>
+      > Image Gen: [ON]
+    </div>
+  </div>
+
+  <!-- Chat History Sidebar -->
+  <div id="history-sidebar" class="glass">
+    <div class="panel-h" style="margin-bottom: 25px;">History Log</div>
+    <button id="new-chat" style="width:100%; padding:12px; background:var(--neon); color:#000; border:none; border-radius:8px; font-weight:bold; margin-bottom:20px; cursor:pointer;">+ NEW SESSION</button>
+    <div id="history-list"></div>
+  </div>
+
+  <!-- Chat Area -->
+  <div id="chat-window">
+    <div class="msg msg-ai">Bonjour MAKEN. Je suis prêt. Que souhaites-tu faire aujourd'hui ?</div>
+  </div>
+
+  <!-- File Preview -->
+  <div id="file-preview">
+    <span>📎</span> <span id="file-name">nom_du_fichier.pdf</span> <span id="remove-file" style="cursor:pointer; color:red;">✕</span>
+  </div>
+
+  <!-- Waveform -->
+  <div id="waveform">
+    <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+  </div>
+
+  <!-- Terminal -->
+  <div id="terminal-bar" class="glass">
+    <button class="btn-circle" id="attach-btn" title="Ajouter un fichier/image">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+    </button>
+    <input type="file" id="file-input" style="display:none;" multiple>
+    
+    <button class="btn-circle" id="mic-btn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+    </button>
+
+    <input type="text" id="user-input" placeholder="Neural interface standby..." autocomplete="off">
+    
+    <button class="btn-circle" id="send-btn">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+    </button>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+<script>
+/* --- CONFIG & STATE --- */
+const API = '';
+let currentSession = localStorage.getItem('makenbrain_session');
+let activity = 0;
+let scene, camera, renderer, orb, particles;
+let recognition;
+let attachedFiles = [];
+
+/* --- THREE.JS JARVIS CORE --- */
+function initThree() {
+  const container = document.getElementById('canvas-container');
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.1, 1000);
+  camera.position.z = 5;
+
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  container.appendChild(renderer.domElement);
+
+  // THE CORE ORB
+  const geom = new THREE.IcosahedronGeometry(1.3, 4);
+  const mat = new THREE.MeshPhongMaterial({
+    color: 0x00f2ff, wireframe: true, transparent: true, opacity: 0.6,
+    emissive: 0x00f2ff, emissiveIntensity: 0.4
+  });
+  orb = new THREE.Mesh(geom, mat);
+  scene.add(orb);
+
+  // PARTICLES
+  const pCount = 2000;
+  const pGeom = new THREE.BufferGeometry();
+  const pPos = new Float32Array(pCount * 3);
+  for(let i=0; i<pCount*3; i++) pPos[i] = (Math.random() - 0.5) * 12;
+  pGeom.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
+  particles = new THREE.Points(pGeom, new THREE.PointsMaterial({color: 0x00f2ff, size: 0.02, transparent: true, opacity: 0.4}));
+  scene.add(particles);
+
+  const light = new THREE.PointLight(0x00f2ff, 2, 10);
+  light.position.set(2, 2, 2);
+  scene.add(light);
+  scene.add(new THREE.AmbientLight(0x202020));
+
+  animate();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const time = performance.now() * 0.001;
+  orb.rotation.y += 0.005 + (activity * 0.05);
+  orb.rotation.x += 0.002;
+  orb.scale.setScalar(1 + Math.sin(time * 3) * 0.03 + (activity * 0.15));
+  particles.rotation.y -= 0.001;
+  renderer.render(scene, camera);
+}
+
+/* --- HUD ANIMATIONS --- */
+function startHUD() {
+  gsap.to("#panel-left", { opacity: 1, x: 0, duration: 1, delay: 0.5 });
+  gsap.to("#panel-right", { opacity: 1, x: 0, duration: 1, delay: 0.7 });
+  setInterval(() => {
+    document.getElementById('clock').textContent = new Date().toLocaleTimeString('fr-FR');
+  }, 1000);
+}
+
+/* --- CHAT LOGIC --- */
+const input = document.getElementById('user-input');
+const chatWindow = document.getElementById('chat-window');
+
+function addMsg(text, role) {
+  const div = document.createElement('div');
+  div.className = `msg msg-${role}`;
+  div.textContent = text;
+  chatWindow.appendChild(div);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+async function sendChat() {
+  const msg = input.value.trim();
+  if(!msg && attachedFiles.length === 0) return;
+  
+  if(msg) addMsg(msg, 'user');
+  input.value = '';
+  activity = 1;
+  
+  // Animation de réflexion
+  const thinking = document.createElement('div');
+  thinking.className = 'msg msg-ai';
+  thinking.textContent = "...";
+  chatWindow.appendChild(thinking);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  try {
+    const res = await fetch(`${API}/chat/`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        message: msg || "Analyse les fichiers joints.",
+        session_id: currentSession,
+        use_memory: true
+      })
+    });
+    const data = await res.json();
+    thinking.textContent = data.response;
+    if(data.session_id) {
+      currentSession = data.session_id;
+      localStorage.setItem('makenbrain_session', data.session_id);
+    }
+  } catch(e) {
+    thinking.textContent = "Erreur système : connexion au cortex impossible.";
+  } finally {
+    activity = 0;
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+    clearFiles();
+  }
+}
+
+document.getElementById('send-btn').onclick = sendChat;
+input.onkeydown = (e) => e.key === 'Enter' && sendChat();
+
+/* --- SPEECH RECOGNITION --- */
+if ('webkitSpeechRecognition' in window) {
+  recognition = new webkitSpeechRecognition();
+  recognition.lang = 'fr-FR';
+  recognition.continuous = false;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    document.getElementById('mic-btn').classList.add('active');
+    document.getElementById('waveform').style.display = 'flex';
+    gsap.to(".wave-bar", {height: "20px", duration: 0.5, stagger: 0.1, repeat: -1, yoyo: true});
+  };
+
+  recognition.onresult = (e) => {
+    const result = e.results[0][0].transcript;
+    input.value = result;
+  };
+
+  recognition.onend = () => {
+    document.getElementById('mic-btn').classList.remove('active');
+    document.getElementById('waveform').style.display = 'none';
+    gsap.killTweensOf(".wave-bar");
+    if(input.value) sendChat();
+  };
+}
+
+document.getElementById('mic-btn').onclick = () => {
+  if(recognition) recognition.start();
+};
+
+/* --- FILE UPLOAD --- */
+const fileInput = document.getElementById('file-input');
+const attachBtn = document.getElementById('attach-btn');
+const filePreview = document.getElementById('file-preview');
+
+attachBtn.onclick = () => fileInput.click();
+
+fileInput.onchange = (e) => {
+  attachedFiles = Array.from(e.target.files);
+  if(attachedFiles.length > 0) {
+    filePreview.style.display = 'flex';
+    document.getElementById('file-name').textContent = attachedFiles.length > 1 ? `${attachedFiles.length} fichiers` : attachedFiles[0].name;
+  }
+};
+
+function clearFiles() {
+  attachedFiles = [];
+  fileInput.value = '';
+  filePreview.style.display = 'none';
+}
+document.getElementById('remove-file').onclick = clearFiles;
+
+/* --- HISTORY SIDEBAR --- */
+const sidebar = document.getElementById('history-sidebar');
+document.getElementById('toggle-menu').onclick = () => {
+  sidebar.classList.toggle('open');
+  if(sidebar.classList.contains('open')) loadHistory();
+};
+
+async function loadHistory() {
+  const list = document.getElementById('history-list');
+  list.innerHTML = '<div style="opacity:0.5; font-size:12px;">Chargement...</div>';
+  try {
+    const res = await fetch(`${API}/history/list`);
+    const data = await res.json();
+    list.innerHTML = '';
+    data.sessions.forEach(s => {
+      const div = document.createElement('div');
+      div.className = 'hist-item';
+      div.innerHTML = `<div class="hist-topic">${s.topic || "Conversation sans titre"}</div>
+                       <div class="hist-meta">${s.message_count} messages · ${new Date(s.updated_at).toLocaleDateString()}</div>`;
+      div.onclick = () => loadSession(s.id);
+      list.appendChild(div);
+    });
+  } catch(e) { list.innerHTML = "Impossible de charger l'historique."; }
+}
+
+async function loadSession(id) {
+  currentSession = id;
+  localStorage.setItem('makenbrain_session', id);
+  sidebar.classList.remove('open');
+  chatWindow.innerHTML = '';
+  addMsg("Chargement de la session...", "ai");
+  try {
+    const res = await fetch(`${API}/history/${id}`);
+    const data = await res.json();
+    chatWindow.innerHTML = '';
+    data.messages.forEach(m => addMsg(m.content, m.role === 'user' ? 'user' : 'ai'));
+  } catch(e) { addMsg("Erreur lors du chargement de la session.", "ai"); }
+}
+
+document.getElementById('new-chat').onclick = async () => {
+  try {
+    const res = await fetch(`${API}/history/new`, {method: 'POST'});
+    const data = await res.json();
+    currentSession = data.session_id;
+    localStorage.setItem('makenbrain_session', data.session_id);
+    chatWindow.innerHTML = '<div class="msg msg-ai">Nouvelle session initialisée.</div>';
+    sidebar.classList.remove('open');
+  } catch(e) { alert("Erreur lors de la création de la session."); }
+};
+
+/* --- STATS UPDATE --- */
+async function updateStats() {
+  try {
+    const [m, g] = await Promise.all([
+      fetch(`${API}/memory/stats`).then(r=>r.json()),
+      fetch(`${API}/graph/stats`).then(r=>r.json())
+    ]);
+    document.getElementById('stat-mem').textContent = m.total_memories || 0;
+    document.getElementById('stat-graph').textContent = g.nodes || 0;
+  } catch(e) {}
+}
+
+window.onload = () => {
+  initThree();
+  startHUD();
+  updateStats();
+  setInterval(updateStats, 15000);
+};
+
+window.onresize = () => {
+  camera.aspect = window.innerWidth/window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+};
+</script>
+</body>
+</html>
