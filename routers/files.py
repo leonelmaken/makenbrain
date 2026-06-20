@@ -1,49 +1,40 @@
-"""
-Endpoints Phase 2 :
-- Ingestion d'un fichier unique (texte ou PDF)
-- Ingestion d'un dossier entier
-- Surveillance automatique de dossiers
-"""
+"""Secure ingestion and file watcher endpoints."""
+from __future__ import annotations
+
 import asyncio
+import logging
 import re
-import tempfile
 from pathlib import Path
 from typing import Optional
 
-import fitz  # PyMuPDF
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+import fitz
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 
+from core.archiver import archiver
+from core.audit import audit_event
+from core.auth import SECURE
 from core.dedup import is_duplicate, register
 from core.memory import add_memory
+from core.permissions import permission_manager
+from core.sandbox import resolve_sandbox_path
 from core.summarizer import summarize
-from core.watcher import start_watcher, stop_watcher, get_status, get_log
+from core.watcher import get_log, get_status, start_watcher, stop_watcher
 
 router = APIRouter()
+logger = logging.getLogger("makenbrain.files")
 
 SUPPORTED_EXT = {
-    # Frontend / Mobile
     ".ts", ".tsx", ".js", ".jsx", ".json", ".md", ".txt", ".csv", ".log",
-    # Backend Java / Spring Boot
     ".java", ".xml", ".yml", ".yaml", ".properties", ".sql", ".gradle", ".http",
-    # Docs & Config
     ".pdf", ".html", ".env.example", ".kt", ".swift",
 }
-IGNORED_DIRS  = {".git", "node_modules", ".venv", "__pycache__", "brain_data", ".idea", "dist", "build", "target"}
+IGNORED_DIRS = {".git", "node_modules", ".venv", "__pycache__", "brain_data", ".idea", "dist", "build", "target"}
 
-
-# ── Schemas ───────────────────────────────────────────────────────────────────
 
 class IngestFileRequest(BaseModel):
     file_path: str
     tags: Optional[str] = ""
-
-    model_config = {"json_schema_extra": {
-        "example": {
-            "file_path": "C:/Users/MAKEN/Documents/Projet/smartbudget/README.md",
-            "tags": "smartbudget,doc"
-        }
-    }}
 
 
 class IngestFolderRequest(BaseModel):
@@ -51,56 +42,40 @@ class IngestFolderRequest(BaseModel):
     tags: Optional[str] = ""
     extensions: Optional[list[str]] = None
     max_files: Optional[int] = 200
-    with_summary: bool = False  # False = rapide (pas de LLM par fichier)
-
-    model_config = {"json_schema_extra": {
-        "example": {
-            "folder_path": "C:/Users/MAKEN/Documents/Projet/SmartBudget Africa",
-            "tags": "smartbudget,projet",
-            "max_files": 100,
-            "with_summary": False
-        }
-    }}
+    with_summary: bool = False
 
 
 class WatchRequest(BaseModel):
     folder_path: str
 
-    model_config = {"json_schema_extra": {
-        "example": {
-            "folder_path": "C:/Users/MAKEN/Documents/Projet"
-        }
-    }}
-
-
-# ── Utilitaires ───────────────────────────────────────────────────────────────
 
 def chunk_text(text: str, chunk_size: int = 400) -> list[str]:
-    """Découpe le texte en fragments cohérents (sur fins de phrase)."""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
+    """Split text into sentence-aware chunks."""
+    sentences = re.split(r"(?<=[.!?])\s+", text.strip())
     chunks, current = [], ""
-    for s in sentences:
-        if len(current) + len(s) + 1 <= chunk_size:
-            current = current + " " + s if current else s
+    for sentence in sentences:
+        if len(current) + len(sentence) + 1 <= chunk_size:
+            current = current + " " + sentence if current else sentence
         else:
             if current:
                 chunks.append(current.strip())
-            current = s
+            current = sentence
     if current:
         chunks.append(current.strip())
-    return [c for c in chunks if len(c) > 20]
+    return [chunk for chunk in chunks if len(chunk) > 20]
 
 
 def read_pdf(file_path: str) -> str:
-    """Extrait le texte d'un PDF page par page via PyMuPDF."""
+    """Extract text from a PDF."""
     doc = fitz.open(file_path)
-    pages = [page.get_text() for page in doc]
-    doc.close()
-    return "\n".join(pages)
+    try:
+        return "\n".join(page.get_text() for page in doc)
+    finally:
+        doc.close()
 
 
 def read_text_file(file_path: str) -> str:
-    """Lit un fichier texte avec gestion des encodages."""
+    """Read a text file with common encodings and clean HTML when needed."""
     p = Path(file_path)
     raw = ""
     for enc in ("utf-8", "utf-8-sig", "latin-1", "cp1252"):
@@ -109,7 +84,6 @@ def read_text_file(file_path: str) -> str:
             break
         except Exception:
             continue
-    # Extraction propre du texte pour les fichiers HTML
     if p.suffix.lower() == ".html" and raw:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(raw, "html.parser")
@@ -119,52 +93,31 @@ def read_text_file(file_path: str) -> str:
     return raw
 
 
-# ── Fonction centrale d'ingestion ─────────────────────────────────────────────
-
 async def ingest_single_file(file_path: str, tags: str = "", with_summary: bool = True) -> dict:
-    """
-    Ingère un fichier unique dans la mémoire.
-    Gère : déduplication, extraction, résumé, fragmentation.
-    """
-    p = Path(file_path)
-
+    """Ingest one sandboxed file into memory."""
+    p = permission_manager.require(file_path, action="ingest.file", endpoint="/files/ingest-file")
     if not p.exists():
         raise FileNotFoundError(f"Fichier introuvable : {file_path}")
     if not p.is_file():
         raise ValueError(f"Ce chemin n'est pas un fichier : {file_path}")
+    if p.suffix.lower() not in SUPPORTED_EXT:
+        return {"chunks_created": 0, "skipped": True, "reason": "format non supporté", "file": p.name}
 
-    # Lecture selon le type
-    if p.suffix.lower() == ".pdf":
-        text = read_pdf(str(p))
-    else:
-        text = read_text_file(str(p))
-
+    text = read_pdf(str(p)) if p.suffix.lower() == ".pdf" else read_text_file(str(p))
     if not text or len(text.strip()) < 20:
         return {"chunks_created": 0, "skipped": True, "reason": "contenu vide ou trop court", "file": p.name}
-
-    # Déduplication
     if is_duplicate(text):
         return {"chunks_created": 0, "skipped": True, "reason": "déjà connu du cerveau", "file": p.name}
 
-    # Enregistrer le hash
     register(text)
-
-    # Résumé automatique (désactivable pour les ingestions massives)
     summary = ""
     if with_summary:
         summary = await summarize(text, title=p.name)
         await add_memory(
             content=f"[RÉSUMÉ] {p.name} : {summary}",
-            metadata={
-                "source": str(p),
-                "title": p.name,
-                "tags": f"resume,{tags}".strip(","),
-                "type": "summary",
-                "file_type": p.suffix,
-            },
+            metadata={"source": str(p), "title": p.name, "tags": f"resume,{tags}".strip(","), "type": "summary", "file_type": p.suffix},
         )
 
-    # Découper et stocker les fragments
     chunks = chunk_text(text)
     ids = []
     for i, chunk in enumerate(chunks):
@@ -182,193 +135,147 @@ async def ingest_single_file(file_path: str, tags: str = "", with_summary: bool 
         )
         ids.append(mid)
 
-    return {
-        "file": p.name,
-        "path": str(p),
-        "chunks_created": len(chunks),
-        "summary": summary,
-        "skipped": False,
-    }
+    return {"file": p.name, "path": str(p), "chunks_created": len(chunks), "summary": summary, "skipped": False, "ids": ids}
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
-@router.post("/ingest-file")
+@router.post("/ingest-file", dependencies=SECURE)
 async def ingest_file(request: IngestFileRequest):
-    """Ingère un fichier unique (texte ou PDF) dans la mémoire du cerveau."""
+    """Ingest one sandboxed file."""
     try:
-        result = await ingest_single_file(request.file_path, request.tags)
+        result = await ingest_single_file(request.file_path, request.tags or "")
+        audit_event(action="ingest.file", tool="files", endpoint="/files/ingest-file", file_path=result.get("path", request.file_path), result="ok", success=True)
         return result
-    except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as exc:
+        audit_event(action="ingest.file", tool="files", endpoint="/files/ingest-file", file_path=request.file_path, result=str(exc), success=False)
+        raise HTTPException(status_code=404, detail=str(exc))
+    except PermissionError as exc:
+        audit_event(action="ingest.file", tool="files", endpoint="/files/ingest-file", file_path=request.file_path, result=str(exc), success=False)
+        raise HTTPException(status_code=403, detail=str(exc))
+    except Exception as exc:
+        audit_event(action="ingest.file", tool="files", endpoint="/files/ingest-file", file_path=request.file_path, result=str(exc), success=False)
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-from core.archiver import archiver
-
-@router.post("/upload")
+@router.post("/upload", dependencies=SECURE)
 async def upload_files(files: list[UploadFile] = File(...), tags: str = Form("")):
-    """
-    Reçoit des fichiers ou des archives ZIP.
-    Si c'est un ZIP, il est extrait et chaque fichier interne est ingéré.
-    """
+    """Store uploads under uploads/ and ingest them."""
+    uploads_dir = resolve_sandbox_path("uploads", must_exist=False)
+    uploads_dir.mkdir(parents=True, exist_ok=True)
     results = []
-    for f in files:
-        suffix = Path(f.filename).suffix.lower()
-        
-        # Cas spécial : Archive ZIP
+
+    for uploaded in files:
+        suffix = Path(uploaded.filename).suffix.lower()
+        safe_name = Path(uploaded.filename).name.replace(" ", "_")
+        upload_path = uploads_dir / safe_name
+        data = await uploaded.read()
+        upload_path.write_bytes(data)
+
         if suffix == ".zip":
-            data = await f.read()
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp_zip:
-                tmp_zip.write(data)
-                zip_path = Path(tmp_zip.name)
-            
             try:
-                extract_dir = archiver.extract_zip(zip_path)
+                extract_dir = archiver.extract_zip(upload_path)
                 internal_files = archiver.list_files(extract_dir)
-                
+                zip_report = {"archive": uploaded.filename, "files_count": len(internal_files), "processed": []}
                 ok_count = 0
-                zip_report = {"archive": f.filename, "files_count": len(internal_files), "processed": []}
-                for int_f in internal_files:
+                for internal_file in internal_files:
                     try:
-                        res = await ingest_single_file(str(int_f), tags=f"zip,{f.filename},{tags}", with_summary=False)
+                        res = await ingest_single_file(str(internal_file), tags=f"zip,{uploaded.filename},{tags}", with_summary=False)
                         zip_report["processed"].append(res)
-                        if not res.get("skipped"): ok_count += 1
-                    except Exception as e:
-                        zip_report["processed"].append({"file": int_f.name, "error": str(e)})
-                
+                        if not res.get("skipped"):
+                            ok_count += 1
+                    except Exception as exc:
+                        zip_report["processed"].append({"file": internal_file.name, "error": str(exc)})
                 zip_report["message"] = f"{ok_count} fichiers de l'archive ingérés."
                 results.append(zip_report)
                 archiver.cleanup(extract_dir)
             finally:
-                zip_path.unlink(missing_ok=True)
+                upload_path.unlink(missing_ok=True)
             continue
 
-        # Cas normal : Fichier unique
         if suffix not in SUPPORTED_EXT:
-            results.append({"file": f.filename, "skipped": True, "reason": "format non supporté"})
+            results.append({"file": uploaded.filename, "skipped": True, "reason": "format non supporté"})
             continue
 
-        data = await f.read()
-        tmp_path = None
         try:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                tmp.write(data)
-                tmp_path = tmp.name
-            result = await ingest_single_file(tmp_path, tags, with_summary=False)
-            result["file"] = f.filename
+            result = await ingest_single_file(str(upload_path), tags, with_summary=False)
+            result["file"] = uploaded.filename
             results.append(result)
-        except Exception as e:
-            results.append({"file": f.filename, "skipped": True, "reason": str(e)})
-        finally:
-            if tmp_path:
-                Path(tmp_path).unlink(missing_ok=True)
+        except Exception as exc:
+            results.append({"file": uploaded.filename, "skipped": True, "reason": str(exc)})
 
-    return {
-        "message": f"Traitement terminé pour {len(files)} élément(s).",
-        "results": results,
-    }
+    audit_event(action="ingest.upload", tool="files", endpoint="/files/upload", result=f"{len(files)} item(s)", success=True)
+    return {"message": f"Traitement terminé pour {len(files)} élément(s).", "results": results}
 
 
-@router.post("/ingest-folder")
+@router.post("/ingest-folder", dependencies=SECURE)
 async def ingest_folder(request: IngestFolderRequest):
-    """
-    Ingère récursivement un dossier entier.
-    Ignore automatiquement : .git, node_modules, .venv, __pycache__, etc.
-    Idéal pour nourrir le cerveau avec un projet complet.
-    """
-    folder = Path(request.folder_path)
+    """Recursively ingest a sandboxed folder."""
+    try:
+        folder = permission_manager.require(request.folder_path, action="ingest.folder", endpoint="/files/ingest-folder")
+    except PermissionError as exc:
+        audit_event(action="ingest.folder", tool="files", endpoint="/files/ingest-folder", file_path=request.folder_path, result=str(exc), success=False)
+        raise HTTPException(status_code=403, detail=str(exc))
+
     if not folder.exists() or not folder.is_dir():
         raise HTTPException(status_code=404, detail=f"Dossier introuvable : {request.folder_path}")
 
     allowed_ext = set(request.extensions) if request.extensions else SUPPORTED_EXT
-
-    report = {
-        "folder": str(folder),
-        "processed": [],
-        "skipped_dedup": [],
-        "skipped_unsupported": 0,
-        "errors": [],
-        "total_files_ingested": 0,
-        "total_chunks": 0,
-    }
-
-    files = [
+    report = {"folder": str(folder), "processed": [], "skipped_dedup": [], "skipped_unsupported": 0, "errors": [], "total_files_ingested": 0, "total_chunks": 0}
+    candidates = [
         f for f in folder.rglob("*")
-        if f.is_file()
-        and f.suffix.lower() in allowed_ext
-        and not any(d in f.parts for d in IGNORED_DIRS)
+        if f.is_file() and f.suffix.lower() in allowed_ext and not any(d in f.parts for d in IGNORED_DIRS)
     ]
+    if request.max_files and len(candidates) > request.max_files:
+        candidates = candidates[:request.max_files]
 
-    # Limiter le nombre de fichiers
-    if request.max_files and len(files) > request.max_files:
-        files = files[:request.max_files]
-
-    for file_path in files:
+    for file_path in candidates:
         try:
-            result = await ingest_single_file(str(file_path), request.tags, request.with_summary)
+            result = await ingest_single_file(str(file_path), request.tags or "", request.with_summary)
             if result.get("skipped"):
-                report["skipped_dedup"].append({
-                    "file": result["file"],
-                    "reason": result.get("reason", ""),
-                })
+                report["skipped_dedup"].append({"file": result["file"], "reason": result.get("reason", "")})
             else:
-                report["processed"].append({
-                    "file": result["file"],
-                    "chunks": result["chunks_created"],
-                    "summary": (result.get("summary") or "mode rapide")[:120],
-                })
+                report["processed"].append({"file": result["file"], "chunks": result["chunks_created"], "summary": (result.get("summary") or "mode rapide")[:120]})
                 report["total_files_ingested"] += 1
                 report["total_chunks"] += result["chunks_created"]
-        except Exception as e:
-            report["errors"].append({"file": str(file_path), "error": str(e)})
+        except Exception as exc:
+            report["errors"].append({"file": str(file_path), "error": str(exc)})
 
-    report["message"] = (
-        f"{report['total_files_ingested']} fichier(s) ingéré(s) — "
-        f"{len(report['skipped_dedup'])} déjà connus — "
-        f"{report['total_chunks']} fragments créés."
-    )
+    report["message"] = f"{report['total_files_ingested']} fichier(s) ingéré(s) - {len(report['skipped_dedup'])} déjà connus - {report['total_chunks']} fragments créés."
+    audit_event(action="ingest.folder", tool="files", endpoint="/files/ingest-folder", file_path=str(folder), result=report["message"], success=True)
     return report
 
 
-@router.post("/watch")
+@router.post("/watch", dependencies=SECURE)
 async def watch_folder(request: WatchRequest):
-    """
-    Démarre la surveillance automatique d'un dossier.
-    Chaque fichier créé ou modifié est automatiquement ingéré dans la mémoire.
-    """
-    folder = Path(request.folder_path)
+    """Start automatic ingestion watcher on a sandboxed folder."""
+    try:
+        folder = permission_manager.require(request.folder_path, action="watch.start", endpoint="/files/watch")
+    except PermissionError as exc:
+        audit_event(action="watch.start", tool="files", endpoint="/files/watch", file_path=request.folder_path, result=str(exc), success=False)
+        raise HTTPException(status_code=403, detail=str(exc))
     if not folder.exists():
         raise HTTPException(status_code=404, detail=f"Dossier introuvable : {request.folder_path}")
     loop = asyncio.get_event_loop()
     start_watcher(str(folder), loop)
-    return {
-        "message": f"Surveillance active sur : {folder}",
-        "path": str(folder),
-        "active": True,
-        "info": "Chaque fichier modifié ou créé sera automatiquement ingéré.",
-    }
+    audit_event(action="watch.start", tool="files", endpoint="/files/watch", file_path=str(folder), result="active", success=True)
+    return {"message": f"Surveillance active sur : {folder}", "path": str(folder), "active": True}
 
 
-@router.delete("/watch")
+@router.delete("/watch", dependencies=SECURE)
 async def stop_watching():
-    """Arrête la surveillance automatique."""
+    """Stop automatic folder watching."""
     stop_watcher()
+    audit_event(action="watch.stop", tool="files", endpoint="/files/watch", result="stopped", success=True)
     return {"message": "Surveillance arrêtée."}
 
 
 @router.get("/watch/status")
 async def watcher_status():
-    """Statut du watcher et dernières ingestions automatiques."""
+    """Return watcher status."""
     return get_status()
 
 
 @router.get("/report")
 async def ingestion_report():
-    """Rapport complet des ingestions automatiques."""
+    """Return recent automatic ingestion log."""
     log = get_log()
-    return {
-        "total_events": len(log),
-        "log": log[-50:],
-    }
+    return {"total_events": len(log), "log": log[-50:]}

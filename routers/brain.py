@@ -12,6 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
 
+from core.audit import audit_event
+from core.auth import SECURE
 from core.domain_explorer import explore_domain, list_domains, DOMAIN_CATALOG
 from core.scheduler import (
     start_scheduler, stop_scheduler, get_status as scheduler_status,
@@ -164,7 +166,7 @@ async def expert_chat(req: ExpertChatRequest):
         f"Réponds en français sauf si la question est en anglais."
     )
 
-    response = await groq_generate(req.question, context, system=system)
+    response = await groq_generate(req.question, context, system_prompt=system)
 
     return {
         "question":      req.question,
@@ -178,13 +180,13 @@ async def expert_chat(req: ExpertChatRequest):
 
 # ── Endpoints Scheduler ───────────────────────────────────────────────────────
 
-@router.get("/scheduler/status")
+@router.get("/scheduler/status", dependencies=SECURE)
 async def get_scheduler_status():
     """Statut du scheduler autonome."""
     return scheduler_status()
 
 
-@router.post("/scheduler/configure")
+@router.post("/scheduler/configure", dependencies=SECURE)
 async def configure_scheduler(req: SchedulerConfigRequest):
     """
     Configure et active le scheduler autonome.
@@ -208,14 +210,30 @@ async def configure_scheduler(req: SchedulerConfigRequest):
         stop_scheduler()
         msg = "Scheduler désactivé."
 
+    audit_event(
+        action="scheduler.configure",
+        tool="brain",
+        endpoint="/brain/scheduler/configure",
+        result=msg,
+        success=True,
+        details=cfg,
+    )
     return {"message": msg, "config": cfg}
 
 
-@router.post("/scheduler/research-now")
+@router.post("/scheduler/research-now", dependencies=SECURE)
 async def research_now(background_tasks: BackgroundTasks):
     """Lance une recherche autonome immédiatement (sans attendre le scheduler)."""
     cfg = load_config()
     background_tasks.add_task(run_auto_research, cfg)
+    audit_event(
+        action="scheduler.research_now",
+        tool="brain",
+        endpoint="/brain/scheduler/research-now",
+        result="started",
+        success=True,
+        details={"domains": cfg.get("domains_to_watch", []), "queries": cfg.get("queries_auto", [])},
+    )
     return {
         "status":  "lancé",
         "message": "Recherche autonome démarrée en arrière-plan.",
@@ -224,11 +242,12 @@ async def research_now(background_tasks: BackgroundTasks):
     }
 
 
-@router.post("/scheduler/report-now")
+@router.post("/scheduler/report-now", dependencies=SECURE)
 async def report_now():
     """Génère le rapport quotidien immédiatement."""
     cfg    = load_config()
     report = await generate_daily_report(cfg)
+    audit_event(action="scheduler.report_now", tool="brain", endpoint="/brain/scheduler/report-now", result="generated", success=True)
     return report
 
 

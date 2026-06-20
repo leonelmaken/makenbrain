@@ -8,6 +8,7 @@ from duckduckgo_search import DDGS
 # Imports locaux
 from core.graph import neuron_graph
 from core.permissions import permission_manager
+from core.sandbox import resolve_sandbox_path
 
 # Initialisation du serveur MCP
 mcp = FastMCP("makenBrain")
@@ -42,7 +43,9 @@ async def request_file_access(path: str) -> str:
     Demande l'autorisation d'accéder à un fichier ou un dossier local.
     L'IA doit appeler cet outil AVANT de tenter de lire un fichier hors du projet.
     """
-    permission_manager.grant_access(path)
+    granted = permission_manager.grant_access(path)
+    if not granted:
+        return f"Accès refusé pour : {path}. Le chemin doit rester dans workspace/, projects/ ou uploads/."
     return f"Autorisation accordée pour : {path}. Je peux maintenant lire ce contenu."
 
 @mcp.tool()
@@ -54,7 +57,7 @@ async def read_local_file_smart(path: str, max_lines: int = 100) -> str:
     try:
         p = Path(path)
         if p.exists() and p.is_file():
-            lines = p.read_text(encoding="utf-8").splitlines()
+            lines = p.read_text(encoding="utf-8", errors="ignore").splitlines()
             total = len(lines)
             content = "\n".join(lines[:max_lines])
             if total > max_lines:
@@ -141,7 +144,7 @@ async def generate_diagram(description: str) -> str:
     
     html_content = f"<html><body><script src='https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js'></script><div class='mermaid'>{mermaid_code}</div><script>mermaid.initialize({{startOnLoad:true}});</script></body></html>"
     
-    output_path = Path("brain_data/outputs/diagram.html")
+    output_path = resolve_sandbox_path("workspace/outputs/diagram.html", must_exist=False)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(html_content, encoding="utf-8")
     
@@ -151,7 +154,7 @@ async def generate_diagram(description: str) -> str:
 async def create_presentation(topic: str) -> str:
     """Crée une présentation HTML professionnelle avec Reveal.js."""
     # Simulation de création de présentation pour cet exemple
-    output_path = Path("brain_data/outputs/presentation.html")
+    output_path = resolve_sandbox_path("workspace/outputs/presentation.html", must_exist=False)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
     html = f"<html><head><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/reveal.js/dist/reveal.css'></head><body><div class='reveal'><div class='slides'><section><h1>{topic}</h1><p>Généré par MakenBrain</p></section></div></div><script src='https://cdn.jsdelivr.net/npm/reveal.js/dist/reveal.js'></script><script>Reveal.initialize();</script></body></html>"

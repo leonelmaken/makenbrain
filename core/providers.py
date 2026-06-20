@@ -4,9 +4,13 @@ Connecteurs externes — Phase 2.2
 - Wikipedia : connaissance encyclopédique automatique, sans clé API
 - Routage intelligent : le cerveau choisit seul le bon outil
 """
+import logging
 import httpx
 from groq import Groq as GroqClient
 from core.config import settings
+from core.audit import audit_event
+
+logger = logging.getLogger("makenbrain.providers")
 
 # ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -78,7 +82,18 @@ async def groq_generate(
     Génère une réponse via Groq (Llama 3.3 70B).
     Supporte le streaming si stream=True.
     """
-    client = _groq_client()
+    try:
+        client = _groq_client()
+    except Exception as exc:
+        audit_event(
+            action="provider.groq.init",
+            tool="groq",
+            result=str(exc),
+            success=False,
+        )
+        logger.exception("Groq client initialization failed")
+        raise
+
     messages = []
     
     current_system = system_prompt or SYSTEM_PROMPT
@@ -95,22 +110,42 @@ async def groq_generate(
 
     messages.append({"role": "user", "content": prompt})
 
-    if stream:
-        return client.chat.completions.create(
-            model=model,
-            messages=[{"role": "system", "content": current_system}] + messages,
-            temperature=0.7,
-            max_tokens=2048,
-            stream=True
-        )
-    else:
+    try:
+        logger.info("Groq request model=%s stream=%s chars=%s", model, stream, len(prompt))
+        if stream:
+            return client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": current_system}] + messages,
+                temperature=0.7,
+                max_tokens=2048,
+                stream=True
+            )
+
         response = client.chat.completions.create(
             model=model,
             messages=[{"role": "system", "content": current_system}] + messages,
             temperature=0.7,
             max_tokens=2048,
         )
-        return response.choices[0].message.content
+        content = response.choices[0].message.content or ""
+        audit_event(
+            action="provider.groq.generate",
+            tool="groq",
+            result="ok",
+            success=True,
+            details={"model": model, "prompt_chars": len(prompt), "response_chars": len(content)},
+        )
+        return content
+    except Exception as exc:
+        audit_event(
+            action="provider.groq.generate",
+            tool="groq",
+            result=str(exc),
+            success=False,
+            details={"model": model, "prompt_chars": len(prompt)},
+        )
+        logger.exception("Groq generation failed")
+        raise
 
 
 async def check_groq() -> dict:

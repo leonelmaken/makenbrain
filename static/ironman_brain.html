@@ -3,274 +3,592 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>🧠 MakenBrain — Digital Cortex v4.5</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Syncopate:wght@700&display=swap" rel="stylesheet">
+<title>MakenBrain — Cortex Neuronal</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Syncopate:wght@700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-:root { --bg: #05060b; --accent: #2de2c9; --text: #9fb4c9; --panel: rgba(10, 11, 20, 0.95); --danger: #ff4d4d; }
-* { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
-
-#c { position: fixed; inset: 0; z-index: 0; opacity: 0.6; pointer-events: none; }
-
-/* ── SIDEBAR (CLAUDE STYLE) ── */
-#sidebar {
-  position: fixed; top: 0; left: -320px; width: 300px; height: 100%; z-index: 10000;
-  background: #080912; border-right: 1px solid rgba(255,255,255,0.1);
-  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1); padding: 80px 20px 20px; pointer-events: all;
-  display: flex; flex-direction: column;
+:root {
+  --bg: #05060a;
+  --bg-elevated: #0b0d16;
+  --panel: rgba(12,14,23,0.74);
+  --border: rgba(255,255,255,0.08);
+  --border-soft: rgba(255,255,255,0.05);
+  --text: #aab8c9;
+  --text-dim: #5c6b7e;
+  --text-bright: #f3f7fb;
+  --accent: #2de2c9;
+  --danger: #ff5c5c;
+  --state: #3aa0ff;
+  --state-rgb: 58,160,255;
 }
-#sidebar.open { left: 0; }
-#sidebar-toggle {
-  position: fixed; top: 20px; left: 20px; z-index: 11000;
-  width: 45px; height: 45px; background: var(--panel); border: 1px solid rgba(255,255,255,0.1);
-  border-radius: 12px; color: var(--accent); display: flex; align-items: center; justify-content: center;
-  cursor: pointer; font-size: 20px; pointer-events: all; transition: 0.3s ease;
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: var(--bg); color: var(--text); font-family:'Inter',sans-serif;
+  overflow:hidden; width:100vw; height:100vh; -webkit-font-smoothing:antialiased;
 }
-#sidebar.open ~ #sidebar-toggle { left: 320px; }
+.mono { font-family:'JetBrains Mono', monospace; }
+button { font-family:inherit; }
+button:focus-visible, .chip:focus-visible, input:focus-visible { outline:1.5px solid var(--accent); outline-offset:2px; }
 
-.sidebar-label { font-size: 10px; letter-spacing: 2px; color: var(--accent); opacity: 0.6; margin-bottom: 10px; text-transform: uppercase; font-weight: bold; }
-#history-list { flex: 1; overflow-y: auto; scrollbar-width: none; margin-top: 10px; }
-.hist-item {
-  padding: 12px; border-radius: 8px; cursor: pointer; font-size: 13px; margin-bottom: 8px;
-  background: rgba(255,255,255,0.02); display: flex; justify-content: space-between; align-items: center;
-  border: 1px solid transparent; transition: 0.2s;
+#c { position:fixed; inset:0; z-index:0; pointer-events:none; }
+
+/* ── TOP HUD ── */
+#brand-mark {
+  position:fixed; top:26px; left:28px; z-index:40;
+  font-size:11px; letter-spacing:3px; color:var(--text-dim); text-transform:uppercase; pointer-events:none;
 }
-.hist-item:hover { background: rgba(255,255,255,0.05); border-color: rgba(45,226,201,0.2); }
-.hist-item.active { border-left: 3px solid var(--accent); background: rgba(45, 226, 201, 0.05); }
-.action-btn { opacity: 0.4; font-size: 12px; transition: 0.2s; }
-.action-btn:hover { opacity: 1; color: var(--danger); }
+#brand-mark span { color: var(--accent); }
+
+#status-hud {
+  position:fixed; top:28px; right:28px; z-index:40;
+  display:flex; align-items:center; gap:9px;
+  font-size:11px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase;
+}
+#status-dot {
+  width:7px; height:7px; border-radius:50%; background:var(--state);
+  box-shadow:0 0 10px var(--state), 0 0 22px rgba(var(--state-rgb),.6);
+  transition:background .5s ease, box-shadow .5s ease;
+  animation:dotbreathe 2.2s ease-in-out infinite;
+}
+@keyframes dotbreathe { 0%,100%{opacity:.55; transform:scale(1);} 50%{opacity:1; transform:scale(1.3);} }
+#status-label { color:var(--state); transition:color .5s ease; }
 
 /* ── VOICE OVERLAY ── */
 #voice-overlay {
-  position: fixed; inset: 0; z-index: 100000; background: rgba(6, 7, 13, 0.92);
-  display: none; flex-direction: column; align-items: center; justify-content: center;
-  backdrop-filter: blur(20px); transition: 0.3s ease; pointer-events: all;
+  position:fixed; inset:0; z-index:100000; background:rgba(4,5,10,.92);
+  display:none; flex-direction:column; align-items:center; justify-content:center;
+  backdrop-filter:blur(24px); pointer-events:all;
 }
-#voice-overlay.active { display: flex; }
-.voice-wave { display: flex; gap: 8px; height: 60px; align-items: center; margin-bottom: 30px; }
-.wave-bar { width: 5px; height: 20px; background: var(--accent); border-radius: 3px; animation: wave 1s infinite ease-in-out; }
-.wave-bar:nth-child(2) { animation-delay: 0.1s; }
-.wave-bar:nth-child(3) { animation-delay: 0.2s; }
-.wave-bar:nth-child(4) { animation-delay: 0.3s; }
-.wave-bar:nth-child(5) { animation-delay: 0.4s; }
-@keyframes wave { 0%, 100% { height: 20px; opacity: 0.3; } 50% { height: 60px; opacity: 1; box-shadow: 0 0 15px var(--accent); } }
-.voice-status { font-family: 'Syncopate'; font-size: 20px; letter-spacing: 4px; color: #fff; text-shadow: 0 0 20px var(--accent); }
+#voice-overlay.active { display:flex; }
+.voice-wave { display:flex; gap:7px; height:64px; align-items:center; margin-bottom:28px; }
+.wave-bar { width:5px; height:18px; background:var(--state); border-radius:3px; animation:wave 1s infinite ease-in-out; transition:background .4s ease; }
+.wave-bar:nth-child(2){animation-delay:.1s;} .wave-bar:nth-child(3){animation-delay:.2s;}
+.wave-bar:nth-child(4){animation-delay:.3s;} .wave-bar:nth-child(5){animation-delay:.4s;}
+@keyframes wave { 0%,100%{height:18px; opacity:.35;} 50%{height:60px; opacity:1; box-shadow:0 0 18px var(--state);} }
+.voice-status { font-size:15px; letter-spacing:5px; color:var(--text-bright); text-transform:uppercase; }
+.voice-hint { margin-top:18px; color:var(--text-dim); font-size:11px; letter-spacing:2px; }
 
-/* ── MAIN CONTENT ── */
-#app { position: relative; z-index: 10; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; }
+/* ── MAIN ── */
+#app { position:relative; z-index:10; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; }
 
 #welcome {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  flex: 1; text-align: center; padding: 20px; transition: 0.5s ease;
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; padding:24px;
 }
-#welcome.hide { display: none; }
-h1 { font-family: 'Syncopate'; font-size: 38px; color: #fff; margin-bottom: 15px; letter-spacing: 4px; }
+#welcome.hide { display:none; }
+.eyebrow { display:flex; align-items:center; font-size:11px; letter-spacing:3px; color:var(--text-dim); margin-bottom:22px; text-transform:uppercase; }
+#eyebrow-dot { width:6px; height:6px; border-radius:50%; background:var(--accent); margin-right:9px; box-shadow:0 0 8px var(--accent); animation:dotbreathe 2.4s ease-in-out infinite; }
+h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:var(--text-bright); letter-spacing:3px;
+  text-shadow:0 0 50px rgba(var(--state-rgb),.25); transition:text-shadow .6s ease; }
+.sub { margin-top:12px; color:var(--text-dim); font-size:15px; letter-spacing:.2px; }
 
-.chips { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 40px; }
-.chip { padding: 14px 24px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); border-radius: 25px; cursor: pointer; font-size: 14px; transition: 0.2s; color: #fff; }
-.chip:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-3px); }
+.chips { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:46px; max-width:580px; }
+.chip {
+  display:flex; align-items:center; gap:8px; padding:11px 18px;
+  background:var(--panel); border:0.5px solid var(--border); border-radius:999px;
+  cursor:pointer; font-size:12px; letter-spacing:1px; text-transform:uppercase; color:var(--text);
+  backdrop-filter:blur(16px); transition:.25s ease;
+}
+.chip svg { color:var(--text-dim); transition:.25s; }
+.chip:hover { border-color:rgba(var(--state-rgb),.5); color:var(--text-bright); transform:translateY(-3px); box-shadow:0 10px 30px -8px rgba(var(--state-rgb),.4); }
+.chip:hover svg { color:var(--state); }
 
 /* ── CHAT ── */
 #chat-container {
-  width: 100%; max-width: 850px; flex: 1; overflow-y: auto; display: none;
-  flex-direction: column; gap: 24px; padding: 100px 20px 180px; scrollbar-width: none;
+  width:100%; max-width:760px; flex:1; overflow-y:auto; display:none;
+  flex-direction:column; gap:20px; padding:110px 22px 200px; scrollbar-width:none;
 }
-#chat-container.active { display: flex; }
-.msg { max-width: 85%; padding: 18px 24px; border-radius: 20px; font-size: 16px; line-height: 1.6; animation: msgIn 0.4s ease-out; }
-@keyframes msgIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
-.user-msg { align-self: flex-end; background: var(--accent); color: #000; font-weight: 600; box-shadow: 0 8px 20px rgba(45,226,201,0.2); }
-.ai-msg { align-self: flex-start; background: #161821; border: 1px solid rgba(255,255,255,0.08); color: #eaf2f7; }
+#chat-container::-webkit-scrollbar { display:none; }
+#chat-container.active { display:flex; }
 
-/* ── REFLECTION UI ── */
-#thinking { display: none; align-items: center; gap: 12px; padding: 20px; align-self: flex-start; }
-.dot { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: pulse 1.4s infinite ease-in-out; }
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
-@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 0.3; } 50% { transform: scale(1.5); opacity: 1; } }
+.msg { max-width:78%; padding:16px 20px; border-radius:18px; font-size:15.5px; line-height:1.65; animation:msgIn .45s cubic-bezier(.16,1,.3,1); }
+@keyframes msgIn { from{opacity:0; transform:translateY(16px);} to{opacity:1; transform:translateY(0);} }
+.user-msg { align-self:flex-end; background:var(--accent); color:#06241f; font-weight:500; border-bottom-right-radius:6px; box-shadow:0 10px 30px -10px rgba(45,226,201,.35); }
+.ai-msg { align-self:flex-start; background:var(--panel); border:0.5px solid var(--border); color:var(--text-bright); backdrop-filter:blur(16px); border-bottom-left-radius:6px; }
+.msg-tag { display:flex; align-items:center; gap:6px; font-size:10px; letter-spacing:2px; color:var(--text-dim); margin-bottom:6px; text-transform:uppercase; }
+.msg-tag-dot { width:5px; height:5px; border-radius:50%; background:var(--state); transition:background .4s ease; }
+.msg-body { white-space:pre-wrap; }
 
-/* ── INPUT BOX ── */
-#input-wrapper {
-  position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-  width: min(850px, 92vw); z-index: 99999;
+#thinking { display:flex; align-items:center; gap:12px; padding:14px 6px; align-self:flex-start; }
+#thinking .dots { display:flex; gap:6px; }
+#thinking .dot { width:7px; height:7px; border-radius:50%; background:var(--state); animation:pulse 1.4s infinite ease-in-out; }
+#thinking .dot:nth-child(2){animation-delay:.2s;} #thinking .dot:nth-child(3){animation-delay:.4s;}
+@keyframes pulse { 0%,100%{transform:scale(1); opacity:.3;} 50%{transform:scale(1.5); opacity:1;} }
+#thinking-text { font-size:11px; letter-spacing:2px; color:var(--state); text-transform:uppercase; transition:color .4s ease; }
+
+/* ── INGEST PROGRESS ── */
+#ingest-progress {
+  position:fixed; left:50%; bottom:128px; transform:translateX(-50%);
+  width:min(560px,88vw); display:none; flex-direction:column; gap:8px;
+  padding:14px 18px; background:var(--panel); border:0.5px solid var(--border);
+  border-radius:16px; backdrop-filter:blur(20px); z-index:300; box-shadow:0 14px 40px rgba(0,0,0,.5);
 }
-#input-box {
-  background: #1a1c26; border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 20px; padding: 10px 20px; display: flex; align-items: center; gap: 15px;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.9); transition: 0.3s;
-}
-#input-box:focus-within { border-color: var(--accent); box-shadow: 0 0 30px rgba(45,226,201,0.15); }
-#input { flex: 1; background: none; border: none; outline: none; color: #fff; font-size: 17px; font-family: inherit; padding: 10px 0; }
-.btn { width: 44px; height: 44px; border-radius: 50%; border: none; background: none; color: var(--text); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 20px; transition: 0.2s; }
-.btn:hover { color: var(--accent); background: rgba(255,255,255,0.05); }
-.btn.active { color: var(--accent); background: rgba(45,226,201,0.1); border: 1px solid var(--accent); }
-#send-btn { background: var(--accent); color: #000; font-size: 24px; font-weight: bold; border-radius: 14px; }
-#send-btn.stop { background: var(--danger); color: #fff; font-size: 20px; }
+#ingest-progress.active { display:flex; }
+.ingest-label { font-size:10px; letter-spacing:2px; color:var(--state); transition:color .4s ease; }
+#ingest-filename { font-size:12px; color:var(--text-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.progress-bar { height:3px; background:rgba(255,255,255,.07); border-radius:2px; overflow:hidden; }
+.progress-fill { height:100%; width:0%; background:var(--state); border-radius:2px; transition:width .25s ease, background .4s ease; }
 
+/* ── DOCK ── */
+#dock-wrapper { position:fixed; bottom:26px; left:50%; transform:translateX(-50%); width:min(700px,92vw); display:flex; flex-direction:column; align-items:center; gap:10px; z-index:500; }
+
+#history-handle {
+  display:flex; align-items:center; gap:7px; padding:7px 18px;
+  background:var(--panel); border:0.5px solid var(--border); border-radius:999px;
+  font-size:10.5px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase;
+  cursor:pointer; backdrop-filter:blur(18px); transition:.25s ease;
+}
+#history-handle:hover { color:var(--text-bright); border-color:rgba(255,255,255,.25); transform:translateY(-2px); }
+#history-handle svg { transition:transform .35s ease; }
+#history-handle.open svg { transform:rotate(180deg); }
+
+#dock {
+  position:relative; width:100%; background:var(--panel);
+  backdrop-filter:blur(26px) saturate(160%); border:0.5px solid var(--border); border-radius:999px;
+  padding:7px 7px 7px 8px; display:flex; align-items:center; gap:5px;
+  box-shadow:0 22px 60px rgba(0,0,0,.65), 0 0 0 1px rgba(var(--state-rgb),.1);
+  transition:box-shadow .5s ease, border-color .5s ease;
+}
+#dock:focus-within { border-color:rgba(var(--state-rgb),.45); box-shadow:0 22px 60px rgba(0,0,0,.65), 0 0 0 1px rgba(var(--state-rgb),.25), 0 0 36px -6px rgba(var(--state-rgb),.45); }
+
+.dock-btn { width:38px; height:38px; border-radius:50%; border:none; background:none; color:var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:.2s; }
+.dock-btn:hover { color:var(--text-bright); background:rgba(255,255,255,.06); }
+.dock-btn.active { color:var(--accent); background:rgba(45,226,201,.12); }
+
+#input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text-bright); font-size:15.5px; font-family:inherit; padding:10px 6px; }
+#input::placeholder { color:var(--text-dim); }
+
+#send-btn { width:42px; height:42px; border-radius:50%; border:none; background:var(--accent); color:#06241f; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:.25s ease; }
+#send-btn:hover { transform:scale(1.06); }
+#send-btn:active { transform:scale(.94); }
+#send-btn.stop { background:var(--danger); color:#fff; }
+
+#import-dropdown {
+  position:absolute; bottom:calc(100% + 10px); left:0; min-width:212px;
+  background:var(--bg-elevated); border:0.5px solid var(--border); border-radius:16px; padding:8px;
+  display:flex; flex-direction:column; gap:2px; opacity:0; transform:translateY(10px) scale(.96);
+  pointer-events:none; transition:.28s cubic-bezier(.16,1,.3,1); box-shadow:0 16px 50px rgba(0,0,0,.6);
+}
+#import-dropdown.open { opacity:1; transform:translateY(0) scale(1); pointer-events:all; }
+.import-opt { display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:10px; font-size:13px; color:var(--text); cursor:pointer; transition:.15s; }
+.import-opt:hover { background:rgba(255,255,255,.05); color:var(--accent); }
+.import-opt svg { color:var(--text-dim); flex-shrink:0; transition:.15s; }
+.import-opt:hover svg { color:var(--accent); }
+
+/* ── HISTORY SHEET ── */
+#sheet-backdrop { position:fixed; inset:0; background:rgba(2,3,8,.62); backdrop-filter:blur(6px); opacity:0; pointer-events:none; transition:opacity .45s ease; z-index:800; }
+#sheet-backdrop.open { opacity:1; pointer-events:all; }
+
+#history-sheet {
+  position:fixed; left:50%; bottom:0; transform:translate(-50%,102%);
+  width:min(720px,94vw); max-height:78vh; background:var(--bg-elevated);
+  border:0.5px solid var(--border); border-bottom:none; border-radius:26px 26px 0 0;
+  z-index:900; display:flex; flex-direction:column; box-shadow:0 -25px 80px rgba(0,0,0,.7);
+  transition:transform .55s cubic-bezier(.16,1,.3,1);
+}
+#history-sheet.open { transform:translate(-50%,0); }
+
+#sheet-grabber { width:38px; height:4px; border-radius:2px; background:var(--border); margin:14px auto 4px; cursor:pointer; }
+#sheet-header { display:flex; align-items:center; justify-content:space-between; padding:10px 26px 18px; border-bottom:0.5px solid var(--border-soft); }
+.sheet-title { font-size:15px; font-weight:500; color:var(--text-bright); letter-spacing:.3px; }
+#sheet-close { width:32px; height:32px; border-radius:50%; border:none; background:rgba(255,255,255,.04); color:var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; transition:.2s; }
+#sheet-close:hover { color:var(--text-bright); background:rgba(255,255,255,.08); }
+
+#sheet-body { padding:20px 26px 30px; overflow-y:auto; scrollbar-width:none; }
+#sheet-body::-webkit-scrollbar { display:none; }
+
+#identity-panel { padding:14px 16px; background:rgba(255,255,255,.025); border:0.5px solid var(--border-soft); border-radius:14px; }
+.sidebar-label { font-size:10px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase; margin-bottom:8px; }
+#user-role { font-size:13px; font-weight:500; color:var(--text-bright); }
+#user-values { font-size:11px; color:var(--text-dim); margin-top:5px; letter-spacing:.2px; }
+
+.projects-row { display:flex; gap:8px; overflow-x:auto; scrollbar-width:none; margin-top:8px; padding-bottom:2px; }
+.projects-row::-webkit-scrollbar { display:none; }
+.project-chip { display:flex; align-items:center; gap:6px; white-space:nowrap; padding:7px 13px; background:rgba(255,255,255,.04); border:0.5px solid var(--border-soft); border-radius:999px; font-size:11.5px; color:var(--text); flex-shrink:0; }
+.project-chip::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--accent); }
+
+#new-chat-btn { width:100%; margin-top:18px; padding:13px; display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(45,226,201,.08); border:0.5px solid rgba(45,226,201,.35); border-radius:13px; color:var(--accent); font-weight:500; font-size:13px; letter-spacing:.5px; cursor:pointer; transition:.2s; }
+#new-chat-btn:hover { background:rgba(45,226,201,.14); }
+
+#history-list { margin-top:18px; display:flex; flex-direction:column; gap:6px; }
+.hist-item { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-radius:11px; cursor:pointer; font-size:13px; background:rgba(255,255,255,.02); border:0.5px solid transparent; transition:.2s; color:var(--text); }
+.hist-item:hover { background:rgba(255,255,255,.05); border-color:var(--border-soft); }
+.hist-item.active { border-left:2px solid var(--accent); background:rgba(45,226,201,.06); }
+.hist-topic { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-right:10px; }
+.hist-del { opacity:.35; display:flex; color:var(--text-dim); transition:.2s; }
+.hist-item:hover .hist-del { opacity:1; }
+.hist-del:hover { color:var(--danger); }
+.hist-empty { opacity:.35; font-size:11px; padding:8px 0; }
+
+@media (max-width:640px) {
+  h1 { font-size:28px; letter-spacing:2px; }
+  .chips { gap:8px; }
+  .chip { padding:9px 14px; font-size:11px; }
+  #brand-mark, #status-hud { font-size:9px; }
+  #dock-wrapper { bottom:18px; width:94vw; }
+  #history-sheet { width:96vw; max-height:84vh; }
+  .msg { max-width:88%; }
+}
 </style>
 </head>
 <body>
 
 <canvas id="c"></canvas>
 
+<div id="brand-mark">MAKEN<span>BRAIN</span></div>
+<div id="status-hud">
+  <div id="status-dot"></div>
+  <span id="status-label">VEILLE</span>
+</div>
+
 <div id="voice-overlay">
   <div class="voice-wave">
     <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
   </div>
-  <div class="voice-status">CORTEX À L'ÉCOUTE...</div>
-  <p style="margin-top: 20px; opacity: 0.5; font-size: 12px; letter-spacing: 2px;">CLIQUEZ POUR INTERROMPRE</p>
+  <div class="voice-status mono">CORTEX À L'ÉCOUTE</div>
+  <p class="voice-hint mono">CLIQUEZ POUR INTERROMPRE</p>
 </div>
 
-<div id="sidebar-toggle">☰</div>
-<div id="sidebar">
-  <div class="sidebar-header">MAKENBRAIN CORTEX</div>
-  
-  <div id="identity-panel" style="margin-bottom: 25px; padding: 15px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(45,226,201,0.2);">
-    <div class="sidebar-label">👤 IDENTITÉ</div>
-    <div id="user-role" style="font-size: 12px; font-weight: bold; color: #fff;">Chargement...</div>
-    <div id="user-values" style="font-size: 10px; opacity: 0.6; margin-top: 5px;">...</div>
-    
-    <div class="sidebar-label" style="margin-top:20px;">📂 PROJETS</div>
-    <div id="active-projects-list" style="font-size: 11px;"></div>
+<div id="sheet-backdrop"></div>
+<div id="history-sheet">
+  <div id="sheet-grabber"></div>
+  <div id="sheet-header">
+    <span class="sheet-title">Mémoire neuronale</span>
+    <button id="sheet-close" aria-label="Fermer"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
   </div>
+  <div id="sheet-body">
+    <div id="identity-panel">
+      <div class="sidebar-label mono">Identité</div>
+      <div id="user-role">Chargement...</div>
+      <div id="user-values">...</div>
+      <div class="sidebar-label mono" style="margin-top:16px">Projets actifs</div>
+      <div id="active-projects-list" class="projects-row"></div>
+    </div>
 
-  <button id="new-chat-btn" style="width:100%; padding:14px; background:rgba(45, 226, 201, 0.1); border:1px solid var(--accent); border-radius:12px; color:var(--accent); cursor:pointer; font-weight:bold; margin-bottom:20px;">+ NOUVELLE SESSION</button>
-  <div class="sidebar-label" style="opacity:0.4">HISTORIQUE</div>
-  <div id="history-list"></div>
+    <button id="new-chat-btn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nouvelle session</button>
+
+    <div class="sidebar-label mono" style="margin-top:22px; opacity:.6">Historique</div>
+    <div id="history-list"></div>
+  </div>
 </div>
 
 <div id="app">
   <div id="welcome">
+    <div class="eyebrow mono"><span id="eyebrow-dot"></span>SYSTÈME EN LIGNE</div>
     <h1 id="greet">Bonjour, MAKEN.</h1>
-    <p style="opacity:0.6; letter-spacing:1px">Comment puis-je assister ton génie aujourd'hui ?</p>
+    <p class="sub">Comment puis-je assister ton génie aujourd'hui ?</p>
     <div class="chips">
-      <div class="chip" data-prompt="Quelles sont les priorités sur le projet ITAG ?">📂 Projet ITAG</div>
-      <div class="chip" data-prompt="Analyse l'architecture de mon projet MakenBrain.">🧠 Analyse Système</div>
-      <div class="chip" data-prompt="Génère une image ultra-réaliste futuriste.">🎨 Générer Image</div>
-      <div class="chip" data-prompt="Crée une courte vidéo d'une nébuleuse.">🎬 Générer Vidéo</div>
+      <div class="chip mono" data-prompt="Quelles sont les priorités sur le projet ITAG ?">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg>
+        Projet ITAG
+      </div>
+      <div class="chip mono" data-prompt="Analyse l'architecture de mon projet MakenBrain.">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7.5 7.2L11 16.4M16.5 7.2L13 16.4M8 6h8"/></svg>
+        Analyse système
+      </div>
+      <div class="chip mono" data-prompt="Génère une image ultra-réaliste futuriste.">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-4 4-3-3-6 6"/></svg>
+        Générer une image
+      </div>
+      <div class="chip mono" data-prompt="Crée une courte vidéo d'une nébuleuse.">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 9l4-2v10l-4-2"/></svg>
+        Générer une vidéo
+      </div>
     </div>
   </div>
 
   <div id="chat-container"></div>
 
-  <div id="thinking">
-    <div style="display:flex; gap:6px;"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    <span id="thinking-text" style="font-size:13px; font-weight:bold; color:var(--accent); text-transform:uppercase; margin-left:10px;">Analyse neuronale...</span>
-  </div>
-
   <div id="ingest-progress">
-    <div style="font-size:10px; letter-spacing:1px; color:var(--accent)">INGESTION NEURONALE...</div>
-    <div id="ingest-filename" style="font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.6">Fichier.pdf</div>
+    <div class="ingest-label mono">INGESTION NEURONALE</div>
+    <div id="ingest-filename">fichier.pdf</div>
     <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
   </div>
+</div>
 
-  <div id="input-wrapper">
+<div id="dock-wrapper">
+  <button id="history-handle" class="mono">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>
+    Historique
+  </button>
+
+  <div id="dock">
     <div id="import-dropdown">
-      <div class="import-opt" onclick="triggerFile('all')">📄 Fichiers</div>
-      <div class="import-opt" onclick="triggerFile('folder')">📁 Dossier</div>
-      <div class="import-opt" onclick="triggerFile('media')">🖼️ Images / Vidéos</div>
-      <div class="import-opt" onclick="triggerFile('zip')">📦 Archive ZIP</div>
+      <div class="import-opt" onclick="triggerFile('all')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/></svg>Fichiers</div>
+      <div class="import-opt" onclick="triggerFile('folder')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg>Dossier</div>
+      <div class="import-opt" onclick="triggerFile('media')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-4 4-3-3-6 6"/></svg>Images / vidéos</div>
+      <div class="import-opt" onclick="triggerFile('zip')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg>Archive ZIP</div>
     </div>
-    <div id="input-box">
-      <button class="btn" id="voice-toggle" title="Réponse Audio Automatique">🗣️</button>
-      <button class="btn" id="attach-btn">📎</button>
-      <input type="file" id="file-all" multiple hidden>
-      <input type="file" id="file-folder" webkitdirectory mozdirectory directory multiple hidden>
-      <input type="file" id="file-media" accept="image/*,video/*" multiple hidden>
-      <input type="file" id="file-zip" accept=".zip" hidden>
-      
-      <input type="text" id="input" placeholder="Envoyer un message au Cortex..." autofocus autocomplete="off">
-      <button class="btn" id="mic-btn">🎙️</button>
-      <button class="btn" id="send-btn">↑</button>
-    </div>
+
+    <button class="dock-btn" id="attach-btn" aria-label="Joindre des fichiers">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5l-8.5 8.5a4.5 4.5 0 0 1-6.36-6.36l9-9a3 3 0 0 1 4.24 4.24l-8.5 8.5a1.5 1.5 0 0 1-2.12-2.12l7.5-7.5"/></svg>
+    </button>
+    <input type="file" id="file-all" multiple hidden>
+    <input type="file" id="file-folder" webkitdirectory mozdirectory directory multiple hidden>
+    <input type="file" id="file-media" accept="image/*,video/*" multiple hidden>
+    <input type="file" id="file-zip" accept=".zip" hidden>
+
+    <button class="dock-btn" id="voice-toggle" aria-label="Réponse audio automatique">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/></svg>
+    </button>
+
+    <input type="text" id="input" placeholder="Envoyer un message au Cortex…" autocomplete="off">
+
+    <button class="dock-btn" id="mic-btn" aria-label="Dicter">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
+    </button>
+    <button id="send-btn" aria-label="Envoyer"></button>
   </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script>
 const API = 'http://localhost:8000';
+const SEND_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
+const STOP_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+const TRASH_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg>';
+
 let currentSession = localStorage.getItem('mb_session');
 let voiceAlwaysOn = localStorage.getItem('mb_voice_on') === 'true';
 let isThinking = false;
 let isRecording = false;
 let abortController = null;
-
-// INIT GREETING
-(function(){
-  const hr = new Date().getHours();
-  document.getElementById('greet').textContent = `${hr < 5 || hr >= 18 ? 'Bonsoir' : hr < 12 ? 'Bonjour' : 'Bon retour'}, MAKEN.`;
-})();
+let actingTimer = null;
 
 const input = document.getElementById('input');
 const chat = document.getElementById('chat-container');
 const welcome = document.getElementById('welcome');
 const voiceBtn = document.getElementById('voice-toggle');
 const sendBtn = document.getElementById('send-btn');
-const thinkingUI = document.getElementById('thinking');
 const voiceOverlay = document.getElementById('voice-overlay');
+const ingestUI = document.getElementById('ingest-progress');
+const ingestFilename = document.getElementById('ingest-filename');
+const progressFill = document.getElementById('progress-fill');
 
-if(voiceAlwaysOn) voiceBtn.classList.add('active');
+sendBtn.innerHTML = SEND_ICON;
+if (voiceAlwaysOn) voiceBtn.classList.add('active');
 
-function startChatUI() {
-  welcome.classList.add('hide');
-  chat.classList.add('active');
+(function () {
+  const hr = new Date().getHours();
+  document.getElementById('greet').textContent = `${hr < 5 || hr >= 18 ? 'Bonsoir' : hr < 12 ? 'Bonjour' : 'Bon retour'}, MAKEN.`;
+})();
+
+/* ── NEURAL CORE — THREE.JS ── */
+const STATES = {
+  idle:      { hex: '#3aa0ff', rgb: '58,160,255',  label: 'VEILLE'  },
+  analyzing: { hex: '#ffa53c', rgb: '255,165,60',   label: 'ANALYSE' },
+  acting:    { hex: '#34d399', rgb: '52,211,153',   label: 'ACTION'  }
+};
+let currentState = 'idle';
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(58, innerWidth / innerHeight, 0.1, 100);
+camera.position.z = 6.4;
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('c'), antialias: true, alpha: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+
+const coreMat = new THREE.MeshBasicMaterial({ color: STATES.idle.hex, wireframe: true, transparent: true, opacity: 0.16 });
+const core = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 4), coreMat);
+scene.add(core);
+
+const glowMat = new THREE.MeshBasicMaterial({ color: STATES.idle.hex, transparent: true, opacity: 0.05 });
+const glow = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3, 2), glowMat);
+scene.add(glow);
+
+const COUNT = 650;
+const positions = new Float32Array(COUNT * 3);
+for (let i = 0; i < COUNT; i++) {
+  const r = 2.3 + Math.random() * 2.6;
+  const t = Math.random() * Math.PI * 2;
+  const p = Math.acos(Math.random() * 2 - 1);
+  positions[i * 3]     = r * Math.sin(p) * Math.cos(t);
+  positions[i * 3 + 1] = r * Math.sin(p) * Math.sin(t);
+  positions[i * 3 + 2] = r * Math.cos(p);
 }
+const pGeo = new THREE.BufferGeometry();
+pGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+const particleMat = new THREE.PointsMaterial({ color: STATES.idle.hex, size: 0.024, transparent: true, opacity: 0.55 });
+const particles = new THREE.Points(pGeo, particleMat);
+scene.add(particles);
+
+// Synapses: sparse nearest-neighbour links so the particle shell reads as a living neuron graph
+const linePositions = [];
+const maxDistSq = 0.85 * 0.85;
+for (let i = 0; i < 220; i++) {
+  const ai = Math.floor(Math.random() * COUNT);
+  let best = -1, bestD = Infinity;
+  for (let j = 0; j < 36; j++) {
+    const bi = Math.floor(Math.random() * COUNT);
+    if (bi === ai) continue;
+    const dx = positions[ai * 3] - positions[bi * 3], dy = positions[ai * 3 + 1] - positions[bi * 3 + 1], dz = positions[ai * 3 + 2] - positions[bi * 3 + 2];
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) { bestD = d; best = bi; }
+  }
+  if (best >= 0 && bestD < maxDistSq) {
+    linePositions.push(positions[ai * 3], positions[ai * 3 + 1], positions[ai * 3 + 2], positions[best * 3], positions[best * 3 + 1], positions[best * 3 + 2]);
+  }
+}
+const lineGeo = new THREE.BufferGeometry();
+lineGeo.setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+const lineMat = new THREE.LineBasicMaterial({ color: STATES.idle.hex, transparent: true, opacity: 0.16 });
+const synapses = new THREE.LineSegments(lineGeo, lineMat);
+scene.add(synapses);
+
+scene.add(new THREE.AmbientLight(0x0a0a10));
+const light = new THREE.PointLight(STATES.idle.hex, 2, 16);
+light.position.set(5, 5, 5);
+scene.add(light);
+
+function setBrainState(name) {
+  if (!STATES[name]) return;
+  currentState = name;
+  const s = STATES[name];
+  document.documentElement.style.setProperty('--state', s.hex);
+  document.documentElement.style.setProperty('--state-rgb', s.rgb);
+  document.getElementById('status-label').textContent = s.label;
+  coreMat.color.set(s.hex);
+  glowMat.color.set(s.hex);
+  particleMat.color.set(s.hex);
+  lineMat.color.set(s.hex);
+  light.color.set(s.hex);
+}
+setBrainState('idle');
+
+// Pulse rings: every message sent/received fires a synapse-style shockwave through the core
+const pulses = [];
+function spawnPulse(colorHex) {
+  const geo = new THREE.RingGeometry(0.08, 0.16, 64);
+  const mat = new THREE.MeshBasicMaterial({ color: colorHex, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false });
+  const ring = new THREE.Mesh(geo, mat);
+  scene.add(ring);
+  pulses.push({ mesh: ring, mat, born: performance.now() });
+}
+
+let mouseX = 0, mouseY = 0;
+addEventListener('mousemove', (e) => { mouseX = e.clientX / innerWidth - 0.5; mouseY = e.clientY / innerHeight - 0.5; });
+
+function animate() {
+  requestAnimationFrame(animate);
+  const speed = currentState === 'analyzing' ? 0.018 : currentState === 'acting' ? 0.01 : 0.0025;
+  core.rotation.y += speed; core.rotation.x += speed * 0.3;
+  glow.rotation.y -= speed * 0.4;
+  particles.rotation.y -= speed * 0.55;
+  synapses.rotation.y -= speed * 0.55;
+
+  camera.position.x += (mouseX * 0.6 - camera.position.x) * 0.04;
+  camera.position.y += (-mouseY * 0.6 - camera.position.y) * 0.04;
+  camera.lookAt(0, 0, 0);
+
+  const now = performance.now();
+  for (let i = pulses.length - 1; i >= 0; i--) {
+    const pu = pulses[i];
+    const t = (now - pu.born) / 950;
+    if (t >= 1) { scene.remove(pu.mesh); pu.mesh.geometry.dispose(); pu.mat.dispose(); pulses.splice(i, 1); continue; }
+    const sc = 1 + t * 16;
+    pu.mesh.scale.set(sc, sc, sc);
+    pu.mat.opacity = 0.85 * (1 - t);
+  }
+
+  renderer.render(scene, camera);
+}
+animate();
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+/* ── CHAT ── */
+function startChatUI() { welcome.classList.add('hide'); chat.classList.add('active'); }
 
 function addMsg(txt, isAi) {
   startChatUI();
   const div = document.createElement('div');
   div.className = `msg ${isAi ? 'ai-msg' : 'user-msg'}`;
-  div.textContent = txt;
+  if (isAi) {
+    const tag = document.createElement('div');
+    tag.className = 'msg-tag mono';
+    tag.innerHTML = '<span class="msg-tag-dot"></span>CORTEX';
+    div.appendChild(tag);
+  }
+  const body = document.createElement('div');
+  body.className = 'msg-body';
+  body.textContent = txt;
+  div.appendChild(body);
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
 
+let thinkingEl = null;
+function showThinking() {
+  thinkingEl = document.createElement('div');
+  thinkingEl.id = 'thinking';
+  thinkingEl.innerHTML = '<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span id="thinking-text" class="mono">ANALYSE NEURONALE</span>';
+  chat.appendChild(thinkingEl);
+  chat.scrollTop = chat.scrollHeight;
+}
+function hideThinking() { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; } }
+
+function flashActing() {
+  setBrainState('acting');
+  spawnPulse(STATES.acting.hex);
+  clearTimeout(actingTimer);
+  actingTimer = setTimeout(() => { if (!isThinking && !isRecording) setBrainState('idle'); }, 1300);
+}
+
 async function send(requestedByVoice = false) {
-  if(isThinking) { stopThinking(); return; }
+  if (isThinking) { stopThinking(); return; }
   const val = input.value.trim();
-  if(!val) return;
-  
+  if (!val) return;
+
   speechSynthesis.cancel();
   addMsg(val, false);
   input.value = '';
-  
+
   isThinking = true;
-  thinkingUI.style.display = 'flex';
-  sendBtn.innerHTML = '■';
+  showThinking();
+  sendBtn.innerHTML = STOP_ICON;
   sendBtn.classList.add('stop');
-  
+  setBrainState('analyzing');
+  spawnPulse(STATES.analyzing.hex);
+
   abortController = new AbortController();
 
   try {
     const res = await fetch(`${API}/chat/`, {
       method: 'POST',
-      headers: {'Content-Type': 'application/json'},
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: val, session_id: currentSession, use_memory: true }),
       signal: abortController.signal
     });
     const data = await res.json();
     stopThinking();
-    if(data.session_id) { 
-      currentSession = data.session_id; 
-      localStorage.setItem('mb_session', data.session_id); 
+    if (data.session_id) {
+      currentSession = data.session_id;
+      localStorage.setItem('mb_session', currentSession);
       loadHistory();
     }
     addMsg(data.response, true);
-    if(requestedByVoice || voiceAlwaysOn) speak(data.response);
-  } catch(e) { if(e.name !== 'AbortError') addMsg("Liaison interrompue.", true); stopThinking(); }
+    flashActing();
+    if (requestedByVoice || voiceAlwaysOn) speak(data.response);
+  } catch (e) {
+    if (e.name !== 'AbortError') addMsg('Liaison interrompue.', true);
+    stopThinking();
+  }
 }
 
 function stopThinking() {
   isThinking = false;
-  thinkingUI.style.display = 'none';
-  sendBtn.innerHTML = '↑';
+  hideThinking();
+  sendBtn.innerHTML = SEND_ICON;
   sendBtn.classList.remove('stop');
-  if(abortController) abortController.abort();
+  if (abortController) abortController.abort();
   speechSynthesis.cancel();
+  if (!isRecording) setBrainState('idle');
 }
 
-// AUDIO ENGINE
 function speak(txt) {
-  if(!('speechSynthesis' in window)) return;
+  if (!('speechSynthesis' in window)) return;
   const u = new SpeechSynthesisUtterance(txt);
   u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.95;
   speechSynthesis.speak(u);
@@ -282,34 +600,38 @@ voiceBtn.onclick = () => {
   voiceBtn.classList.toggle('active');
 };
 
-// VOICE RECOGNITION
 let rec;
-if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
+if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   rec = new SpeechRecognition();
-  rec.lang = 'fr-FR';
-  rec.continuous = false;
-  rec.onstart = () => { isRecording = true; voiceOverlay.classList.add('active'); };
-  rec.onend = () => { isRecording = false; voiceOverlay.classList.remove('active'); };
+  rec.lang = 'fr-FR'; rec.continuous = false;
+  rec.onstart = () => { isRecording = true; voiceOverlay.classList.add('active'); setBrainState('analyzing'); };
+  rec.onend = () => { isRecording = false; voiceOverlay.classList.remove('active'); if (!isThinking) setBrainState('idle'); };
   rec.onresult = (e) => { input.value = e.results[0][0].transcript; send(true); };
-  rec.onerror = () => { isRecording = false; voiceOverlay.classList.remove('active'); };
+  rec.onerror = () => { isRecording = false; voiceOverlay.classList.remove('active'); if (!isThinking) setBrainState('idle'); };
 }
-document.getElementById('mic-btn').onclick = () => { 
-  if(isRecording) rec.stop(); else try{rec.start()}catch(e){rec.stop()} 
-};
-voiceOverlay.onclick = () => rec.stop();
+document.getElementById('mic-btn').onclick = () => { if (isRecording) rec.stop(); else try { rec.start() } catch (e) { rec.stop() } };
+voiceOverlay.onclick = () => rec && rec.stop();
 
 sendBtn.onclick = () => send(false);
-input.onkeydown = (e) => { if(e.key === 'Enter') send(false); };
+input.onkeydown = (e) => { if (e.key === 'Enter') send(false); };
 
-// SIDEBAR & HISTORY
-const sidebar = document.getElementById('sidebar');
-const sideToggle = document.getElementById('sidebar-toggle');
-sideToggle.onclick = () => {
-  sidebar.classList.toggle('open');
-  sideToggle.textContent = sidebar.classList.contains('open') ? '✕' : '☰';
-  if(sidebar.classList.contains('open')) loadHistory();
-};
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.onclick = () => { input.value = chip.dataset.prompt; send(false); };
+});
+
+/* ── HISTORY SHEET ── */
+const sheet = document.getElementById('history-sheet');
+const backdrop = document.getElementById('sheet-backdrop');
+const handle = document.getElementById('history-handle');
+
+function openSheet() { sheet.classList.add('open'); backdrop.classList.add('open'); handle.classList.add('open'); loadHistory(); }
+function closeSheet() { sheet.classList.remove('open'); backdrop.classList.remove('open'); handle.classList.remove('open'); }
+handle.onclick = () => sheet.classList.contains('open') ? closeSheet() : openSheet();
+document.getElementById('sheet-close').onclick = closeSheet;
+document.getElementById('sheet-grabber').onclick = closeSheet;
+backdrop.onclick = closeSheet;
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
 
 async function loadHistory() {
   try {
@@ -320,13 +642,13 @@ async function loadHistory() {
     d.sessions.forEach(s => {
       const item = document.createElement('div');
       item.className = 'hist-item' + (s.id === currentSession ? ' active' : '');
-      item.innerHTML = `<div style="flex:1; overflow:hidden; text-overflow:ellipsis;">${s.topic || "Conversation"}</div>
-                        <div class="actions" onclick="deleteSession(event, '${s.id}')">🗑️</div>`;
+      item.innerHTML = `<div class="hist-topic">${s.topic || 'Conversation'}</div><div class="hist-del">${TRASH_ICON}</div>`;
+      item.querySelector('.hist-del').onclick = (e) => deleteSession(e, s.id);
       item.onclick = () => loadSession(s.id);
       list.appendChild(item);
     });
     loadIdentity();
-  } catch(e) {}
+  } catch (e) {}
 }
 
 async function loadIdentity() {
@@ -336,84 +658,85 @@ async function loadIdentity() {
       fetch(`${API}/identity/projects`).then(r => r.json())
     ]);
     document.getElementById('user-role').textContent = prof.role;
-    document.getElementById('user-values').textContent = prof.core_values.join(' • ');
+    document.getElementById('user-values').textContent = prof.core_values.join(' · ');
     const pList = document.getElementById('active-projects-list');
-    pList.innerHTML = proj.length ? '' : '<div style="opacity:0.3">Aucun projet</div>';
-    proj.forEach(p => { pList.innerHTML += `<div style="padding:4px 0"><span style="color:var(--accent)">▹</span> ${p.name}</div>`; });
-  } catch(e) {}
+    pList.innerHTML = proj.length ? '' : '<div class="hist-empty">Aucun projet actif</div>';
+    proj.forEach(p => { pList.innerHTML += `<div class="project-chip">${p.name}</div>`; });
+  } catch (e) {}
 }
 
 async function loadSession(id) {
   currentSession = id; localStorage.setItem('mb_session', id);
-  sidebar.classList.remove('open'); sideToggle.textContent = '☰';
+  closeSheet();
   chat.innerHTML = '';
   startChatUI();
   try {
     const r = await fetch(`${API}/history/${id}`);
     const d = await r.json();
     d.messages.forEach(m => addMsg(m.content, m.role !== 'user'));
-  } catch(e) {}
+  } catch (e) {}
 }
 
 async function deleteSession(e, id) {
   e.stopPropagation();
-  if(!confirm("Supprimer ?")) return;
+  if (!confirm('Supprimer cette session ?')) return;
   await fetch(`${API}/history/${id}`, { method: 'DELETE' });
-  if(currentSession === id) newChat(); else loadHistory();
+  if (currentSession === id) newChat(); else loadHistory();
 }
 
 function newChat() {
   currentSession = null; localStorage.removeItem('mb_session');
   chat.innerHTML = ''; chat.classList.remove('active');
-  welcome.classList.remove('hide'); sidebar.classList.remove('open');
-  sideToggle.textContent = '☰'; input.focus();
+  welcome.classList.remove('hide'); closeSheet(); input.focus();
 }
 document.getElementById('new-chat-btn').onclick = newChat;
 
-// ── 3D ENGINE (CINEMATIC NEURAL PLANET) ──
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-camera.position.z = 6;
-const renderer = new THREE.WebGLRenderer({canvas: document.getElementById('c'), antialias:true, alpha:true});
-renderer.setSize(window.innerWidth, window.innerHeight);
+/* ── FILE IMPORT ── */
+const attachBtn = document.getElementById('attach-btn');
+const importDropdown = document.getElementById('import-dropdown');
+attachBtn.onclick = (e) => { e.stopPropagation(); importDropdown.classList.toggle('open'); };
+document.addEventListener('click', (e) => {
+  if (!importDropdown.contains(e.target) && e.target !== attachBtn) importDropdown.classList.remove('open');
+});
 
-const brain = new THREE.Mesh(new THREE.IcosahedronGeometry(1.6, 5), new THREE.MeshPhongMaterial({color: 0x2de2c9, wireframe: true, transparent: true, opacity: 0.15}));
-scene.add(brain);
-
-const particleCount = 1000;
-const pGeo = new THREE.BufferGeometry();
-const pPos = new Float32Array(particleCount * 3);
-for (let i = 0; i < particleCount; i++) {
-  const r = 2.5 + Math.random() * 2.5;
-  const t = Math.random() * Math.PI * 2;
-  const p = Math.acos((Math.random() * 2) - 1);
-  pPos[i*3] = r * Math.sin(p) * Math.cos(t);
-  pPos[i*3+1] = r * Math.sin(p) * Math.sin(t);
-  pPos[i*3+2] = r * Math.cos(p);
+function triggerFile(type) {
+  importDropdown.classList.remove('open');
+  const map = { all: 'file-all', folder: 'file-folder', media: 'file-media', zip: 'file-zip' };
+  document.getElementById(map[type]).click();
 }
-pGeo.setAttribute('position', new THREE.BufferAttribute(pPos, 3));
-const particles = new THREE.Points(pGeo, new THREE.PointsMaterial({color: 0x2de2c9, size: 0.02, transparent: true, opacity: 0.5}));
-scene.add(particles);
 
-const light = new THREE.PointLight(0x2de2c9, 2, 15);
-light.position.set(5, 5, 5); scene.add(light);
-scene.add(new THREE.AmbientLight(0x0a0a10));
+['file-all', 'file-folder', 'file-media', 'file-zip'].forEach(id => {
+  document.getElementById(id).addEventListener('change', (e) => {
+    if (e.target.files.length) uploadFiles(e.target.files);
+    e.target.value = '';
+  });
+});
 
-function animate() { 
-  requestAnimationFrame(animate); 
-  const speed = isThinking ? 0.015 : 0.002;
-  brain.rotation.y += speed; 
-  particles.rotation.y -= speed * 0.5;
-  renderer.render(scene, camera); 
+// NB: adapte l'URL ci-dessous (/ingest/upload) à la route réelle exposée par ton backend FastAPI
+function uploadFiles(fileList) {
+  const form = new FormData();
+  Array.from(fileList).forEach(f => form.append('files', f, f.webkitRelativePath || f.name));
+  ingestFilename.textContent = fileList.length > 1 ? `${fileList.length} fichiers` : fileList[0].name;
+  ingestUI.classList.add('active');
+  progressFill.style.width = '0%';
+  setBrainState('analyzing');
+
+  const xhr = new XMLHttpRequest();
+  xhr.open('POST', `${API}/ingest/upload`);
+  xhr.upload.onprogress = (e) => { if (e.lengthComputable) progressFill.style.width = `${Math.round(e.loaded / e.total * 100)}%`; };
+  xhr.onload = () => {
+    progressFill.style.width = '100%';
+    flashActing();
+    setTimeout(() => ingestUI.classList.remove('active'), 900);
+  };
+  xhr.onerror = () => { ingestUI.classList.remove('active'); setBrainState('idle'); };
+  xhr.send(form);
 }
-animate();
 
-window.onresize = () => {
-  camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
+window.onload = () => {
+  if (currentSession) loadSession(currentSession); else input.focus();
+  loadIdentity();
 };
-
-window.onload = () => { if(currentSession) loadSession(currentSession); else input.focus(); loadIdentity(); };
 </script>
 </body>
 </html>

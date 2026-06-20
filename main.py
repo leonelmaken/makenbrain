@@ -5,8 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from routers import chat_history
+from core.auth import SECURE
+from core.config import settings
 from core.memory import init_memory
-from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain, video, identity
+from core.version import APP_NAME, APP_RELEASE_NAME, APP_VERSION
+from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain, video, identity, audit
 
 try:
     from routers import graph
@@ -39,15 +42,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="MakenBrain",
-    description="🧠 Cerveau numérique personnel de MAKEN — v0.5.0",
-    version="0.5.0",
+    title=APP_NAME,
+    description=f"🧠 Cerveau numérique personnel de MAKEN — v{APP_VERSION} ({APP_RELEASE_NAME})",
+    version=APP_VERSION,
     lifespan=lifespan,
 )
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -70,10 +73,12 @@ app.include_router(ingest.router,   prefix="/ingest",   tags=["📥 Ingestion"])
 app.include_router(files.router,    prefix="/files",    tags=["📁 Fichiers & Watcher"])
 app.include_router(search.router,   prefix="/search",   tags=["🌐 Recherche Web"])
 app.include_router(providers.router,prefix="/providers",tags=["🔌 Connecteurs IA"])
-app.include_router(agent.router,    prefix="/agent",    tags=["🤖 Agent Fichiers"])
+app.include_router(agent.router,    prefix="/agent",    tags=["🤖 Agent Fichiers"], dependencies=SECURE)
 app.include_router(analysis.router, prefix="/analysis", tags=["🔍 Analyse & Validation"])
 app.include_router(brain.router,    prefix="/brain",    tags=["🧠 Expertise & Autonomie"])
 app.include_router(video.router,    prefix="/video",    tags=["🎬 Génération Vidéo"])
+
+app.include_router(audit.router,    prefix="/audit",    tags=["Audit"], dependencies=SECURE)
 
 if GRAPH_AVAILABLE:
     app.include_router(graph.router, prefix="/graph", tags=["🕸️ Graphe de Neurones"])
@@ -83,8 +88,9 @@ if GRAPH_AVAILABLE:
 def root():
     return {
         "status":  "alive",
-        "brain":   "MakenBrain",
-        "version": "0.5.0",
+        "brain":   APP_NAME,
+        "version": APP_VERSION,
+        "release": APP_RELEASE_NAME,
         "owner":   "MAKEN",
         "phases_complete": ["1-Foundation", "2-Ingestion+Web", "3-Graph",
                             "4-FileAgent+Analysis", "5-Autonomy+Expertise"],

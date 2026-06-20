@@ -12,6 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from core.audit import audit_event
+from core.permissions import permission_manager
 from core.providers import groq_generate
 from core.changelog import (
     create_proposal, get_proposals, get_proposal,
@@ -25,6 +27,17 @@ SKIP_DIRS = {".git", "node_modules", ".venv", "__pycache__", "build",
 
 JAVA_EXT  = {".java", ".xml", ".yml", ".yaml", ".properties", ".sql"}
 FRONT_EXT = {".ts", ".tsx", ".js", ".jsx", ".json", ".css", ".md"}
+
+
+def _require_analysis_path(path: str, *, endpoint: str) -> Path:
+    try:
+        return permission_manager.require(path, action="analysis.read", endpoint=endpoint)
+    except PermissionError as exc:
+        audit_event(action="analysis.read", tool="analysis", endpoint=endpoint, file_path=path, result=str(exc), success=False)
+        raise HTTPException(status_code=403, detail=str(exc))
+    except ValueError as exc:
+        audit_event(action="analysis.read", tool="analysis", endpoint=endpoint, file_path=path, result=str(exc), success=False)
+        raise HTTPException(status_code=403, detail=str(exc))
 
 
 # ── Schemas ───────────────────────────────────────────────────────────────────
@@ -223,7 +236,7 @@ async def analyze_project(req: AnalyzeProjectRequest):
 
     # ── BACKEND ──────────────────────────────────────────────────────────────
     if req.backend_path:
-        bk = Path(req.backend_path)
+        bk = _require_analysis_path(req.backend_path, endpoint="/analysis/analyze-project")
         if bk.exists():
             files = _collect_files(bk, JAVA_EXT, max_files=40)
             file_list = "\n".join([
@@ -260,7 +273,7 @@ async def analyze_project(req: AnalyzeProjectRequest):
 
     # ── FRONTEND ─────────────────────────────────────────────────────────────
     if req.frontend_path:
-        fr = Path(req.frontend_path)
+        fr = _require_analysis_path(req.frontend_path, endpoint="/analysis/analyze-project")
         if fr.exists():
             files = _collect_files(fr, FRONT_EXT, max_files=50)
 
@@ -338,7 +351,7 @@ async def frontend_errors(req: FrontendErrorRequest):
     Analyse statique (instantanée) + analyse LLM (Groq).
     Aucune modification — lecture seule.
     """
-    fr = Path(req.frontend_path)
+    fr = _require_analysis_path(req.frontend_path, endpoint="/analysis/frontend-errors")
     if not fr.exists():
         raise HTTPException(404, f"Dossier introuvable : {req.frontend_path}")
 
@@ -426,7 +439,7 @@ async def propose(req: ProposeRequest):
     # Analyser le fichier si fourni
     analysis = ""
     if req.file_path:
-        p = Path(req.file_path)
+        p = _require_analysis_path(req.file_path, endpoint="/analysis/propose")
         if p.exists():
             content = p.read_text(encoding="utf-8", errors="ignore")[:3000]
             related = []
@@ -499,6 +512,8 @@ async def approve(req: ApproveRequest):
                 instruction=instruction,
                 provider="groq",
                 backup=True,
+                dry_run=False,
+                apply_changes=True,
             )
             mod_result = await modify_file(mod_req)
             result = {"executed": True, **mod_result}

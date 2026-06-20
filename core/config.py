@@ -1,3 +1,10 @@
+"""Centralized application settings for MakenBrain.
+
+All configuration -- local LLM, vector memory, external connectors and
+security -- is loaded once here from environment variables / `.env` and
+exposed through the shared `settings` instance. Nothing else in the
+codebase should read `os.environ` directly.
+"""
 from pydantic_settings import BaseSettings
 
 
@@ -20,9 +27,27 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     HF_API_KEY: str = ""
 
+    # ── Sécurité (Phase 1) ────────────────────────────────
+    # Clé d'authentification locale, exigée via l'en-tête `X-API-Key`
+    # pour les endpoints sensibles (agent, scheduler, audit, écriture mémoire).
+    # Sans clé configurée, ces endpoints refusent tout accès (échec fermé).
+    ADMIN_API_KEY: str = ""
+
+    # Origines autorisées en CORS, séparées par des virgules.
+    ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
+
+    # Limitation de débit appliquée aux endpoints sensibles.
+    RATE_LIMIT_MAX_REQUESTS: int = 20
+    RATE_LIMIT_WINDOW_SECONDS: float = 60.0
+
     class Config:
         env_file = ".env"
         extra = "ignore"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        """Parse ALLOWED_ORIGINS into a clean list for CORSMiddleware."""
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
 
 def reload_settings(env_file: str = ".env") -> Settings:

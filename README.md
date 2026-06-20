@@ -1,249 +1,315 @@
-<div align="center">
+# MakenBrain
 
-# 🧠 MakenBrain
+**Version:** `0.6.0`  
+**Release:** Phase 1 Secure Core  
+**Statut:** noyau local securise, pret pour durcissement produit
 
-**Cerveau numérique personnel de MAKEN**  
-*Local AI · Vector Memory · Knowledge Graph · File Agent · Autonomous Growth*
-
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi&logoColor=white)
-![Ollama](https://img.shields.io/badge/Ollama-llama3.2:3b-000000?style=flat-square)
-![ChromaDB](https://img.shields.io/badge/ChromaDB-vector_memory-FF6B35?style=flat-square)
-![License](https://img.shields.io/badge/license-Private-red?style=flat-square)
-
-</div>
-
----
+MakenBrain est un cerveau numerique personnel local-first. Il combine chat avec memoire, ingestion de connaissances, recherche web, graphe de concepts, agent fichiers securise, scheduler autonome controle, audit log et connecteurs IA.
 
 ## Vision
 
-MakenBrain est un cerveau numérique 100 % local qui grandit avec toi.  
-Il ingère tes recherches, connecte les concepts entre eux, raisonne, et te rapporte des solutions.  
-Il peut modifier tes fichiers, se connecter à d'autres IA, et évoluer de façon autonome.
+L'objectif est de construire un cerveau numerique personnel qui ne soit pas seulement un assistant, mais une plateforme capable de:
 
-```
-                      ┌─────────────────────────────────┐
-                      │         🧠 MakenBrain            │
-                      │                                 │
-  [Toi]──question──▶  │  Cortex (Ollama llama3.2:3b)   │
-                      │        ↕ RAG ↕                  │
-  [Réponse]  ◀──────  │  Mémoire (ChromaDB vectors)     │
-                      │        ↕                        │
-  [Fichiers] ◀──────  │  Agent Fichiers (Python)        │
-                      │        ↕                        │
-  [Ext. AIs]  ──────▶ │  Connecteurs (Groq / HF / Web)  │
-                      └─────────────────────────────────┘
-```
+- apprendre depuis les donnees autorisees par l'utilisateur;
+- raisonner avec une memoire vectorielle et un graphe de concepts;
+- analyser, creer et modifier des fichiers dans une sandbox stricte;
+- faire des recherches et maintenir une veille;
+- documenter toutes les actions sensibles;
+- evoluer vers des integrations mail, calendrier, projets, automatisation et comptes utilisateur plus tard.
 
----
+## Etat Actuel
 
-## Architecture — 6 phases
+La Phase 1 est maintenant orientee securite et stabilite.
 
-| Phase | Nom | Statut | Description |
-|:---:|---|:---:|---|
-| 1 | **Foundation** | 🔨 En cours | LLM local + Mémoire vectorielle + API REST |
-| 2 | Ingestion | ⬜ | PDF, URLs, fichiers texte → mémoire |
-| 3 | Graphe de neurones | ⬜ | Concepts liés, raisonnement multi-sauts |
-| 4 | Agent fichiers | ⬜ | Lire / modifier / créer / supprimer |
-| 5 | Connecteurs externes | ⬜ | Groq, Hugging Face, Anthropic, Web Search |
-| 6 | Croissance autonome | ⬜ | Scheduler, auto-ingestion, auto-update |
+| Domaine | Statut | Details |
+|---|---:|---|
+| API FastAPI | OK | routes modulaires, Swagger, version centralisee |
+| Memoire vectorielle | OK | ChromaDB + embeddings Sentence Transformers |
+| LLM local | OK | Ollama configurable |
+| Provider cloud | OK | Groq configure si cle disponible |
+| Agent fichiers | OK | sandbox, permissions, dry-run, diff, backup, rollback |
+| Ingestion | OK | fichiers, dossiers, uploads, ZIP securise |
+| Recherche web | OK | DuckDuckGo + ingestion |
+| Graphe de concepts | OK | NetworkX + exploration |
+| Scheduler | OK | protege par API key |
+| Audit log | OK | journal JSON centralise |
+| Auth locale | OK | `X-API-Key` sur endpoints sensibles |
+| CORS | OK | `ALLOWED_ORIGINS`, pas de wildcard |
+| Rate limiting | OK | limite locale sur endpoints critiques |
 
----
+## Versioning
 
-## Stack Phase 1
+La version applicative est definie dans:
 
-| Composant | Technologie | Rôle |
-|---|---|---|
-| LLM Local | Ollama + `llama3.2:3b` | Raisonner, synthétiser, décider |
-| Mémoire | ChromaDB | Stocker les souvenirs vectoriels |
-| Embeddings | `all-MiniLM-L6-v2` | Encoder les textes en vecteurs |
-| API | FastAPI + Uvicorn | Interface REST + Swagger |
-
----
-
-## Prérequis
-
-- [Python 3.11+](https://python.org/downloads)
-- [Ollama](https://ollama.ai) installé et le modèle téléchargé :
-
-```bash
-ollama pull llama3.2:3b
+```text
+core/version.py
 ```
 
----
+Regles:
+
+- `MAJOR`: changement incompatible ou refonte majeure.
+- `MINOR`: nouvelle capacite importante compatible.
+- `PATCH`: correctif ou durcissement sans nouvelle surface majeure.
+
+Version actuelle:
+
+```text
+0.6.0 - Phase 1 Secure Core
+```
+
+Avant chaque release:
+
+1. Mettre a jour `APP_VERSION` dans `core/version.py`.
+2. Mettre a jour `CHANGELOG.md`.
+3. Mettre a jour le bloc version du `README.md`.
+4. Executer les tests.
+
+## Architecture
+
+```text
+makenbrain/
+├── main.py                  # Point d'entree FastAPI
+├── core/
+│   ├── version.py           # Version applicative
+│   ├── config.py            # Configuration centralisee
+│   ├── auth.py              # Auth API key
+│   ├── rate_limit.py        # Rate limiting local
+│   ├── sandbox.py           # Sandbox fichiers
+│   ├── permissions.py       # Permissions session
+│   ├── audit.py             # Audit log JSON
+│   ├── backups.py           # Backup / restore
+│   ├── diff.py              # Diff dry-run
+│   ├── memory.py            # Memoire ChromaDB
+│   ├── llm.py               # Ollama
+│   └── providers.py         # Groq / Wikipedia
+├── routers/
+│   ├── agent.py             # Agent fichiers securise
+│   ├── files.py             # Ingestion fichiers/dossiers/uploads
+│   ├── memory.py            # Memoire
+│   ├── brain.py             # Expertise + scheduler
+│   ├── audit.py             # Lecture audit log
+│   ├── chat.py              # Chat RAG
+│   ├── search.py            # Recherche web
+│   └── graph.py             # Graphe de concepts
+├── brain_data/              # Donnees locales generees
+├── workspace/               # Racine autorisee par sandbox
+├── projects/                # Racine autorisee par sandbox
+├── uploads/                 # Racine autorisee par sandbox
+└── tests/
+```
+
+## Securite Phase 1
+
+### Authentification
+
+Les endpoints sensibles exigent:
+
+```http
+X-API-Key: <ADMIN_API_KEY>
+```
+
+Variable:
+
+```env
+ADMIN_API_KEY=change-me
+```
+
+Si `ADMIN_API_KEY` est absent, les endpoints proteges refusent l'acces.
+
+### CORS
+
+Les origines autorisees viennent de:
+
+```env
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
+`allow_origins=["*"]` ne doit pas etre utilise.
+
+### Rate limiting
+
+Variables:
+
+```env
+RATE_LIMIT_MAX_REQUESTS=20
+RATE_LIMIT_WINDOW_SECONDS=60
+```
+
+Le rate limiting protege les endpoints critiques via la dependance `SECURE`.
+
+### Sandbox fichiers
+
+Les chemins autorises sont uniquement:
+
+```text
+workspace/
+projects/
+uploads/
+```
+
+Interdit:
+
+- `../`
+- chemins systeme;
+- acces disque hors sandbox;
+- `.git`, `.venv`, `System32`, `Program Files`.
+
+### Dry-run et application reelle
+
+Les operations dangereuses suivent ce contrat:
+
+```json
+{
+  "dry_run": true
+}
+```
+
+Genere un diff sans ecrire.
+
+Pour appliquer vraiment:
+
+```json
+{
+  "dry_run": false,
+  "apply_changes": true
+}
+```
 
 ## Installation
 
 ```bash
-# 1. Cloner le dépôt
-git clone https://github.com/leonelmaken/makenbrain.git
-cd makenbrain
-
-# 2. Créer l'environnement virtuel
 python -m venv .venv
 
 # Windows
 .venv\Scripts\activate
 
-# Linux / Mac
+# Linux / macOS
 source .venv/bin/activate
 
-# 3. Installer les dépendances
 pip install -r requirements.txt
-
-# 4. Configurer l'environnement
-copy .env.example .env   # Windows
-# cp .env.example .env   # Linux/Mac
+copy .env.example .env
 ```
 
----
+Configure ensuite `.env`:
+
+```env
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=llama3.2:3b
+ADMIN_API_KEY=change-me
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+RATE_LIMIT_MAX_REQUESTS=20
+RATE_LIMIT_WINDOW_SECONDS=60
+```
 
 ## Lancement
 
 ```bash
-# Terminal 1 — démarrer Ollama
 ollama serve
-
-# Terminal 2 — démarrer MakenBrain
 uvicorn main:app --reload --port 8000
 ```
 
-Ouvre ensuite **http://localhost:8000/docs** pour l'interface Swagger interactive.
+Swagger:
+
+```text
+http://localhost:8000/docs
+```
+
+## Exemples API
+
+### Chat RAG
+
+```bash
+curl -X POST http://localhost:8000/chat/ ^
+  -H "Content-Type: application/json" ^
+  -d "{\"message\":\"Resume mon projet principal\",\"use_memory\":true}"
+```
+
+### Ajouter une memoire protegee
+
+```bash
+curl -X POST http://localhost:8000/memory/add ^
+  -H "Content-Type: application/json" ^
+  -H "X-API-Key: %ADMIN_API_KEY%" ^
+  -d "{\"content\":\"MakenBrain Phase 1 est securise.\",\"source\":\"readme\",\"tags\":\"makenbrain,phase1\"}"
+```
+
+### Dry-run agent fichier
+
+```bash
+curl -X POST http://localhost:8000/agent/write ^
+  -H "Content-Type: application/json" ^
+  -H "X-API-Key: %ADMIN_API_KEY%" ^
+  -d "{\"file_path\":\"workspace/demo.txt\",\"content\":\"hello\",\"dry_run\":true}"
+```
+
+### Application reelle
+
+```bash
+curl -X POST http://localhost:8000/agent/write ^
+  -H "Content-Type: application/json" ^
+  -H "X-API-Key: %ADMIN_API_KEY%" ^
+  -d "{\"file_path\":\"workspace/demo.txt\",\"content\":\"hello\",\"dry_run\":false,\"apply_changes\":true}"
+```
+
+### Lire l'audit log
+
+```bash
+curl -H "X-API-Key: %ADMIN_API_KEY%" http://localhost:8000/audit/log
+```
+
+## Tests
+
+```bash
+python -m pytest tests -q
+```
+
+Les tests Phase 1 couvrent:
+
+- sandbox;
+- permissions;
+- backups / restore;
+- agent dry-run et apply;
+- auth API key;
+- CORS configure;
+- rate limiting.
+
+## Roadmap
+
+### Phase 1 - Secure Core
+
+- [x] Configuration centralisee
+- [x] Auth API key
+- [x] CORS configure
+- [x] Rate limiting
+- [x] Sandbox fichiers
+- [x] Permissions
+- [x] Audit log
+- [x] Backups / rollback
+- [x] Dry-run / diff
+- [x] Tests securite
+
+### Phase 2 - Productisation
+
+- [ ] Auth multi-utilisateur
+- [ ] Rotation des secrets
+- [ ] UI admin securite
+- [ ] Gestion fine des roles
+- [ ] Observabilite plus complete
+
+### Phase 3 - Integrations
+
+- [ ] Emails
+- [ ] Calendrier
+- [ ] Comptes externes
+- [ ] Workflows projet
+- [ ] Automatisation avancee
+
+## Notes De Securite
+
+Ne publie jamais `.env`.
+
+Les cles `GROQ_API_KEY`, `HF_API_KEY` et `ADMIN_API_KEY` doivent etre considerees comme secrets. Si elles ont ete exposees dans un historique Git ou un partage, regenere-les.
 
 ---
 
-## API — Phase 1
-
-### Chat avec mémoire (RAG)
-```bash
-POST /chat/
-{
-  "message": "Quel est mon projet fintech principal?",
-  "use_memory": true,
-  "n_context": 5
-}
-```
-
-### Ajouter un souvenir
-```bash
-POST /memory/add
-{
-  "content": "SmartBudget Africa est une application fintech panafricaine.",
-  "source": "projet",
-  "tags": "smartbudget,fintech,afrique"
-}
-```
-
-### Recherche sémantique
-```bash
-POST /memory/search
-{
-  "query": "fintech Afrique",
-  "n_results": 5
-}
-```
-
-### Ingérer un texte brut
-```bash
-POST /ingest/text
-{
-  "text": "La tontine est un système d'épargne collectif...",
-  "title": "Tontines Africa",
-  "tags": "tontine,finance"
-}
-```
-
-### Ingérer depuis une URL
-```bash
-POST /ingest/url
-{
-  "url": "https://example.com/article-fintech",
-  "tags": "web,recherche"
-}
-```
-
-### Statistiques mémoire
-```bash
-GET /memory/stats
-```
-
----
-
-## Exemple complet
-
-```bash
-# 1. Nourrir le cerveau
-curl -X POST http://localhost:8000/memory/add \
-  -H "Content-Type: application/json" \
-  -d '{"content":"Spring Boot backend de SmartBudget est à 85% et tourne sur Java 17 avec PostgreSQL Neon.", "source":"dev", "tags":"smartbudget,backend,java"}'
-
-# 2. Poser une question avec contexte mémoire
-curl -X POST http://localhost:8000/chat/ \
-  -H "Content-Type: application/json" \
-  -d '{"message":"Quel est l état actuel du backend SmartBudget?"}'
-```
-
----
-
-## Structure du projet
-
-```
-makenbrain/
-├── main.py              # Point d'entrée FastAPI
-├── requirements.txt
-├── .env.example
-├── core/
-│   ├── config.py        # Configuration (pydantic-settings)
-│   ├── llm.py           # Client Ollama — le cortex
-│   └── memory.py        # Client ChromaDB — la mémoire
-├── models/
-│   └── schemas.py       # Schémas Pydantic
-├── routers/
-│   ├── chat.py          # POST /chat/
-│   ├── memory.py        # CRUD mémoire
-│   └── ingest.py        # Ingestion texte + URL
-├── brain_data/          # Données locales (gitignore)
-└── tests/
-```
-
----
-
-## Roadmap détaillée
-
-### Phase 2 — Ingestion avancée
-- [ ] Ingestion PDF (PyMuPDF)
-- [ ] Ingestion de dossiers entiers
-- [ ] Déduplication intelligente
-- [ ] Résumé automatique à l'ingestion
-
-### Phase 3 — Graphe de neurones
-- [ ] Extraction de concepts (NER)
-- [ ] Graphe JSON / Neo4j
-- [ ] Raisonnement multi-sauts
-- [ ] Détection de contradictions
-
-### Phase 4 — Agent fichiers
-- [ ] Lecture / écriture de fichiers
-- [ ] Modification de code
-- [ ] Surveillance de dossiers (Watchdog)
-- [ ] Résumé automatique des changements
-
-### Phase 5 — Connecteurs externes
-- [ ] Groq API (Llama 3.3 70B gratuit)
-- [ ] Hugging Face Inference
-- [ ] Web search (DuckDuckGo / SerpAPI)
-- [ ] Anthropic Claude (fallback)
-
-### Phase 6 — Croissance autonome
-- [ ] Scheduler (APScheduler)
-- [ ] Auto-ingestion de sources
-- [ ] Mise à jour des connexions logiques
-- [ ] Rapport quotidien de croissance
-
----
-
-<div align="center">
-
-**MAKEN × MakenBrain** — *Le cerveau grandit avec toi.*
-
-</div>
+**MAKEN x MakenBrain** - le cerveau grandit avec toi, mais sous controle.

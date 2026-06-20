@@ -4,6 +4,7 @@ Prefix /graph ajouté dans main.py.
 """
 from fastapi import APIRouter, BackgroundTasks
 from pydantic import BaseModel
+from core.audit import audit_event
 from core.graph import neuron_graph
 from core.extractor import extract_and_graph
 
@@ -75,6 +76,14 @@ async def connect(req: ConnectRequest):
     neuron_graph.add_concept(req.concept_b)
     neuron_graph.add_connection(req.concept_a, req.concept_b, req.relationship, req.weight)
     neuron_graph.save()
+    audit_event(
+        action="graph.connect",
+        tool="graph",
+        endpoint="/graph/connect",
+        result="connected",
+        success=True,
+        details=req.model_dump(),
+    )
     return {"connected": True,
             "edge": f"{req.concept_a.lower()} ←→ {req.concept_b.lower()}",
             "graph_edges": neuron_graph.G.number_of_edges()}
@@ -101,6 +110,7 @@ async def reset():
     import networkx as nx
     neuron_graph.G.clear()
     neuron_graph.save()
+    audit_event(action="graph.reset", tool="graph", endpoint="/graph/reset", result="reset", success=True)
     return {"reset": True, "message": "Lance POST /graph/build pour reconstruire."}
 
 
