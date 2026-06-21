@@ -1,3 +1,5 @@
+import sys
+import time
 from contextlib import asynccontextmanager
 import asyncio
 from fastapi import FastAPI
@@ -11,6 +13,15 @@ from core.memory import init_memory
 from core.version import APP_NAME, APP_RELEASE_NAME, APP_VERSION
 from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain, video, identity, audit
 
+# Force l'encodage UTF-8 sur stdout/stderr, quel que soit le code page actif
+# de la console Windows (cp1252 par défaut en environnement francophone).
+# Sans ça, le moindre print() contenant un emoji (utilisés dans tout le
+# projet pour les logs) lève UnicodeEncodeError et fait planter le
+# lifespan avant même que le serveur ait pu démarrer.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 try:
     from routers import graph
     GRAPH_AVAILABLE = True
@@ -20,9 +31,19 @@ except ImportError:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("🧠 MakenBrain s'éveille...")
+    """Cycle de vie de l'application : initialisation au boot, nettoyage à l'arrêt.
+
+    Logs préfixés [STARTUP]/[SHUTDOWN] avec timing par étape -- volontairement
+    sans emoji sur ce chemin précis (la protection UTF-8 ci-dessus couvre déjà
+    tout le reste du projet, mais le boot est l'endroit où une régression
+    d'encodage coûte le plus cher : elle empêche le serveur de démarrer).
+    """
+    boot_start = time.monotonic()
+    print("[STARTUP] MakenBrain s'éveille...")
+
+    step_start = time.monotonic()
     await init_memory()
-    print("✅ Mémoire vectorielle initialisée.")
+    print(f"[STARTUP] Mémoire vectorielle prête ({time.monotonic() - step_start:.1f}s).")
 
     # Démarrer le scheduler si activé
     from core.scheduler import load_config, start_scheduler
@@ -30,11 +51,15 @@ async def lifespan(app: FastAPI):
     if cfg.get("enabled"):
         loop = asyncio.get_event_loop()
         start_scheduler(loop)
-        print("⏰ Scheduler autonome démarré.")
+        print("[STARTUP] Scheduler autonome démarré.")
+    else:
+        print("[STARTUP] Scheduler désactivé (rien à démarrer).")
+
+    print(f"[STARTUP] MakenBrain opérationnel en {time.monotonic() - boot_start:.1f}s.")
 
     yield
 
-    print("💤 MakenBrain s'endort.")
+    print("[SHUTDOWN] MakenBrain s'endort.")
     from core.watcher import stop_watcher
     from core.scheduler import stop_scheduler
     stop_watcher()

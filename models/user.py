@@ -68,6 +68,25 @@ class UserUpdate(BaseModel):
         return value
 
 
+class AuthUserIdentity(BaseModel):
+    """Minimal Supabase Auth identity used to sync the application profile."""
+
+    id: str = Field(min_length=1)
+    email: str | None = Field(default=None, min_length=3)
+    name: str | None = Field(default=None, min_length=1)
+    profile: UserProfile | None = None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email_shape(cls, value: str | None) -> str | None:
+        """Reject obvious invalid emails without adding an extra dependency."""
+        if value is None:
+            return value
+        if "@" not in value or "." not in value.rsplit("@", maxsplit=1)[-1]:
+            raise ValueError("email must look like a valid email address")
+        return value
+
+
 class User(UserBase):
     """User row returned by Supabase and exposed to the application."""
 

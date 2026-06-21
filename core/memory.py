@@ -1,7 +1,9 @@
+import time
 import uuid
 from datetime import datetime
 
 import chromadb
+from chromadb.config import Settings as ChromaSettings
 from chromadb.utils import embedding_functions
 
 from core.config import settings
@@ -12,14 +14,25 @@ _collection: chromadb.Collection | None = None
 
 
 async def init_memory() -> None:
-    """Initialise ChromaDB et la collection principale."""
+    """Initialise ChromaDB et la collection principale.
+
+    Désactive la télémétrie anonyme de ChromaDB (activée par défaut dans le
+    SDK) : elle déclenche un appel réseau sortant à chaque instanciation du
+    client, sans aucun lien fonctionnel avec la mémoire vectorielle --
+    seulement un risque de lenteur supplémentaire sur réseau lent/restreint.
+    """
     global _chroma_client, _collection
 
-    _chroma_client = chromadb.PersistentClient(path=settings.CHROMA_PATH)
+    _chroma_client = chromadb.PersistentClient(
+        path=settings.CHROMA_PATH,
+        settings=ChromaSettings(anonymized_telemetry=False),
+    )
 
+    embed_start = time.monotonic()
     ef = embedding_functions.SentenceTransformerEmbeddingFunction(
         model_name=settings.EMBED_MODEL
     )
+    print(f"[STARTUP]   modèle d'embedding '{settings.EMBED_MODEL}' chargé en {time.monotonic() - embed_start:.1f}s.")
 
     _collection = _chroma_client.get_or_create_collection(
         name=settings.COLLECTION_NAME,

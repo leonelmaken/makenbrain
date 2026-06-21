@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, Protocol
 
-from models.user import User, UserCreate, UserUpdate
+from models.user import AuthUserIdentity, User, UserCreate, UserUpdate
 from core.supabase_client import get_supabase_admin_client
 
 logger = logging.getLogger("makenbrain.users")
@@ -132,6 +132,40 @@ class UserService:
 
         rows = self._rows(response)
         return [self._to_user(row) for row in rows]
+
+    def sync_auth_user(self, auth_user: AuthUserIdentity | dict[str, Any]) -> User:
+        """Create or update the profile row matching a Supabase Auth user.
+
+        Supabase Auth is the source of truth for the user id and email.
+        The application profile remains in the `users` table and is kept
+        in sync when an authenticated request reaches the API.
+        """
+        identity = AuthUserIdentity.model_validate(auth_user)
+        display_name = identity.name
+        if not display_name and identity.profile:
+            display_name = identity.profile.full_name
+
+        try:
+            existing_user = self.get_user(identity.id)
+        except UserNotFoundError:
+            return self.create_user(
+                UserCreate(
+                    id=identity.id,
+                    email=identity.email,
+                    name=display_name,
+                    profile=identity.profile,
+                )
+            )
+
+        updates: dict[str, Any] = {}
+        if identity.email and identity.email != existing_user.email:
+            updates["email"] = identity.email
+        if display_name and display_name != existing_user.name:
+            updates["name"] = display_name
+
+        if not updates:
+            return existing_user
+        return self.update_user(identity.id, UserUpdate.model_validate(updates))
 
     @staticmethod
     def _payload_for_write(model: UserCreate | UserUpdate, *, exclude_unset: bool = False) -> dict[str, Any]:
