@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_MAX_REQUESTS: int = 20
     RATE_LIMIT_WINDOW_SECONDS: float = 60.0
 
+    # ── Supabase (Phase 2.1) ──────────────────────
+    # Backend Supabase (Postgres + RLS). Utilisé uniquement via
+    # core/supabase_client.py -- aucun autre module ne doit lire ces
+    # variables directement.
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
+
     class Config:
         env_file = ".env"
         extra = "ignore"
