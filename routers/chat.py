@@ -3,9 +3,11 @@ Chat hybride — Mémoire + Graphe + LLM + Historique persistant.
 Auto-détection de domaine et auto-alimentation en arrière-plan.
 """
 import json
-from fastapi import APIRouter, BackgroundTasks, Request
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing import Optional
 
 from core.llm import generate, check_ollama_status
@@ -13,8 +15,12 @@ from core.memory import search_memory
 from core.providers import groq_generate, detect_provider
 from core.config import settings
 from core.chat_history import add_message, generate_smart_topic
+from core.auth import require_supabase_user
+from core.consciousness import consciousness
+from models.user import User
 
 router = APIRouter()
+logger = logging.getLogger("makenbrain.chat")
 
 
 class ChatRequest(BaseModel):
@@ -79,7 +85,7 @@ async def _detect_domain_and_research(message: str) -> Optional[str]:
         domain_memories = [m for m in existing if m.get("distance", 1) < 0.6]
 
         if len(domain_memories) < 3:
-            print(f"🔍 Auto-recherche domaine détecté : {best_domain}")
+            logger.info("Auto-recherche domaine detecte : %s", best_domain)
             await explore_domain(best_domain, depth="rapide")
 
         return best_domain
@@ -91,7 +97,11 @@ from core.user_profile import user_profile
 from core.project_memory import project_manager
 
 @router.post("/", response_model=ChatResponse)
-async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
+async def chat(
+    request: ChatRequest,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_supabase_user),
+):
     """
     Chat intelligent avec mémoire persistante, contexte utilisateur et projets.
     """
@@ -102,6 +112,20 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     projects_summary = project_manager.get_projects_summary()
     context_parts.append(f"--- IDENTITÉ UTILISATEUR ---\n{user_summary}")
     context_parts.append(f"--- CONTEXTE PROJETS ---\n{projects_summary}")
+
+    # 1.b. INJECTION MEMOIRE UTILISATEUR PERSONNALISEE
+    user_memory_context = consciousness.get_user_memory_context(
+        str(current_user.id),
+        request.message,
+    )
+    if user_memory_context:
+        context_parts.append(f"--- MEMOIRE UTILISATEUR ---\n{user_memory_context}")
+        context_preview.extend(
+            [
+                line[:100] + "..." if len(line) > 100 else line
+                for line in user_memory_context.splitlines()
+            ]
+        )
 
     # 2. RECHERCHE MÉMOIRE VECTORIELLE
     if request.use_memory:
@@ -143,7 +167,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
 
     if request.stream:
         return StreamingResponse(
-            chat_streamer(request, context, chosen, background_tasks),
+            chat_streamer(
+                request,
+                context,
+                chosen,
+                background_tasks,
+                str(current_user.id),
+            ),
             media_type="text/event-stream"
         )
 
@@ -157,8 +187,8 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
 
     # Sauvegarder dans l'historique de conversation
     if request.session_id:
-        add_message(request.session_id, "user", request.message)
-        add_message(request.session_id, "assistant", response_text)
+        add_message(request.session_id, "user", request.message, str(current_user.id))
+        add_message(request.session_id, "assistant", response_text, str(current_user.id))
         background_tasks.add_task(generate_smart_topic, request.session_id)
 
     return ChatResponse(
@@ -173,7 +203,13 @@ async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     )
 
 
-async def chat_streamer(request: ChatRequest, context: str, chosen: str, background_tasks: BackgroundTasks):
+async def chat_streamer(
+    request: ChatRequest,
+    context: str,
+    chosen: str,
+    background_tasks: BackgroundTasks,
+    user_id: str,
+):
     """Générateur SSE pour le streaming token-par-token."""
     full_response = ""
     
@@ -196,8 +232,8 @@ async def chat_streamer(request: ChatRequest, context: str, chosen: str, backgro
 
     # Sauvegarde historique (une fois le stream fini)
     if request.session_id:
-        add_message(request.session_id, "user", request.message)
-        add_message(request.session_id, "assistant", full_response)
+        add_message(request.session_id, "user", request.message, user_id)
+        add_message(request.session_id, "assistant", full_response, user_id)
         background_tasks.add_task(generate_smart_topic, request.session_id)
 
 

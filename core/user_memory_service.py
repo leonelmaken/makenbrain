@@ -1,4 +1,10 @@
-"""Service layer for user-scoped memories stored in Supabase."""
+"""Service metier des memoires utilisateur stockees dans Supabase.
+
+Ce module appartient a la couche ``core``: il contient la logique metier
+et les acces a Supabase pour la table ``user_memories``. Les DTO Pydantic
+restent dans ``models.user_memory`` afin d'eviter tout couplage inverse
+entre les couches.
+"""
 from __future__ import annotations
 
 import logging
@@ -14,18 +20,37 @@ USER_MEMORIES_TABLE = "user_memories"
 
 
 class UserMemoryServiceError(RuntimeError):
-    """Raised when a user memory operation fails at the service or Supabase layer."""
+    """Erreur racine pour les operations de memoire utilisateur.
+
+    Les exceptions techniques du SDK Supabase sont encapsulees dans ce
+    type afin de presenter un contrat stable aux routes et aux autres
+    services applicatifs.
+    """
 
 
 class UserMemoryNotFoundError(UserMemoryServiceError):
-    """Raised when a requested memory does not exist in the user's scope."""
+    """Signale qu'aucune memoire n'existe dans le perimetre utilisateur.
+
+    Une memoire appartenant a un autre utilisateur est volontairement
+    traitee comme introuvable pour ne jamais reveler l'existence de
+    donnees hors scope.
+    """
 
 
 class UserMemoryService:
-    """Business service for memories owned by one Supabase user profile."""
+    """Service applicatif pour les memoires rattachees a un utilisateur.
+
+    Chaque operation applique explicitement le filtre ``user_id`` afin
+    de garantir l'isolation multi-utilisateur meme lorsque le client
+    Supabase admin contourne les politiques RLS.
+    """
 
     def __init__(self, client: Any | None = None) -> None:
-        """Create the service with an optional Supabase client override."""
+        """Cree le service avec un client Supabase optionnel.
+
+        L'injection d'un client permet de tester la logique metier sans
+        declencher de connexion reelle a Supabase.
+        """
         self._client = client or get_supabase_admin_client()
 
     def create_memory(
@@ -35,7 +60,7 @@ class UserMemoryService:
         source: UserMemorySource | str,
         metadata: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Create a memory for one user and return a normalized dict."""
+        """Cree une memoire utilisateur et retourne un dict normalise."""
         memory = UserMemoryCreate(
             user_id=user_id,
             content=content,
@@ -56,7 +81,7 @@ class UserMemoryService:
         return self._to_memory_dict(row)
 
     def get_user_memories(self, user_id: UUID | str) -> list[dict[str, Any]]:
-        """Return all memories scoped to one user."""
+        """Retourne toutes les memoires appartenant a un utilisateur."""
         try:
             response = (
                 self._client.table(USER_MEMORIES_TABLE)
@@ -71,7 +96,7 @@ class UserMemoryService:
         return [self._to_memory_dict(row) for row in self._rows(response)]
 
     def get_memory(self, user_id: UUID | str, memory_id: UUID | str) -> dict[str, Any]:
-        """Return one memory only if it belongs to the provided user."""
+        """Retourne une memoire uniquement si elle appartient a l'utilisateur."""
         try:
             response = (
                 self._client.table(USER_MEMORIES_TABLE)
@@ -96,7 +121,7 @@ class UserMemoryService:
         memory_id: UUID | str,
         data: UserMemoryUpdate | dict[str, Any],
     ) -> dict[str, Any]:
-        """Update one memory only inside the provided user's scope."""
+        """Met a jour une memoire dans le perimetre strict de l'utilisateur."""
         update_model = UserMemoryUpdate.model_validate(data)
         payload = update_model.model_dump(mode="json", exclude_none=True, exclude_unset=True)
         if not payload:
@@ -120,7 +145,7 @@ class UserMemoryService:
         return self._to_memory_dict(row)
 
     def delete_memory(self, user_id: UUID | str, memory_id: UUID | str) -> None:
-        """Delete one memory only inside the provided user's scope."""
+        """Supprime une memoire dans le perimetre strict de l'utilisateur."""
         try:
             response = (
                 self._client.table(USER_MEMORIES_TABLE)
@@ -138,7 +163,7 @@ class UserMemoryService:
 
     @staticmethod
     def _rows(response: Any) -> list[dict[str, Any]]:
-        """Extract rows from a Supabase response object or mapping."""
+        """Extrait les lignes d'une reponse Supabase objet ou mapping."""
         data = response.get("data") if isinstance(response, dict) else getattr(response, "data", None)
         if data is None:
             return []
@@ -150,13 +175,13 @@ class UserMemoryService:
 
     @classmethod
     def _first_row(cls, response: Any) -> dict[str, Any] | None:
-        """Return the first row from a Supabase response, if any."""
+        """Retourne la premiere ligne d'une reponse Supabase, si presente."""
         rows = cls._rows(response)
         return rows[0] if rows else None
 
     @staticmethod
     def _to_memory_dict(row: dict[str, Any]) -> dict[str, Any]:
-        """Normalize a Supabase row into a JSON-ready memory dict."""
+        """Normalise une ligne Supabase via le DTO public ``UserMemory``."""
         return UserMemory.model_validate(row).model_dump(mode="json")
 
 
@@ -164,7 +189,7 @@ _default_service: UserMemoryService | None = None
 
 
 def _get_default_service() -> UserMemoryService:
-    """Return a lazily initialized default service instance."""
+    """Retourne l'instance de service par defaut, initialisee au besoin."""
     global _default_service
     if _default_service is None:
         _default_service = UserMemoryService()
@@ -177,25 +202,25 @@ def create_memory(
     source: UserMemorySource | str,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Create a memory for one user using the default service."""
+    """Cree une memoire utilisateur via le service par defaut."""
     return _get_default_service().create_memory(user_id, content, source, metadata)
 
 
 def get_user_memories(user_id: UUID | str) -> list[dict[str, Any]]:
-    """Return all memories for one user using the default service."""
+    """Retourne les memoires d'un utilisateur via le service par defaut."""
     return _get_default_service().get_user_memories(user_id)
 
 
 def get_memory(user_id: UUID | str, memory_id: UUID | str) -> dict[str, Any]:
-    """Return one user-scoped memory using the default service."""
+    """Retourne une memoire utilisateur via le service par defaut."""
     return _get_default_service().get_memory(user_id, memory_id)
 
 
 def update_memory(user_id: UUID | str, memory_id: UUID | str, data: UserMemoryUpdate | dict[str, Any]) -> dict[str, Any]:
-    """Update one user-scoped memory using the default service."""
+    """Met a jour une memoire utilisateur via le service par defaut."""
     return _get_default_service().update_memory(user_id, memory_id, data)
 
 
 def delete_memory(user_id: UUID | str, memory_id: UUID | str) -> None:
-    """Delete one user-scoped memory using the default service."""
+    """Supprime une memoire utilisateur via le service par defaut."""
     _get_default_service().delete_memory(user_id, memory_id)

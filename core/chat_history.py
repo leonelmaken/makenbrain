@@ -1,4 +1,4 @@
-"""Persistent chat history with best-effort user memory extraction."""
+"""Historique de chat persistant avec extraction de memoire utilisateur."""
 from __future__ import annotations
 
 import json
@@ -7,14 +7,22 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from core.memory_router import format_memory, should_store_memory
-from core.user_memory_service import create_memory
+from core.memory_router import format_memory, score_memory_relevance, should_store_memory
+from core.user_memory_service import create_memory, get_user_memories
 
 SESSIONS_FILE = Path("brain_data/chat_sessions.json")
 
 
 def _load() -> dict[str, Any]:
-    """Load persisted chat sessions from disk."""
+    """Charge les sessions de conversation depuis le disque.
+
+    Cette fonction permet de centraliser la lecture de l'historique local.
+    Parametres:
+        Aucun.
+    Retour:
+        Dictionnaire des sessions connues, ou dictionnaire vide en cas
+        d'erreur de lecture.
+    """
     if SESSIONS_FILE.exists():
         try:
             return json.loads(SESSIONS_FILE.read_text(encoding="utf-8"))
@@ -24,7 +32,13 @@ def _load() -> dict[str, Any]:
 
 
 def _save(data: dict[str, Any]) -> None:
-    """Persist chat sessions to disk."""
+    """Persiste les sessions de conversation sur le disque.
+
+    Parametres:
+        data: Sessions a serialiser dans le fichier local.
+    Retour:
+        Aucun.
+    """
     SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SESSIONS_FILE.write_text(
         json.dumps(data, ensure_ascii=False, indent=2),
@@ -33,14 +47,26 @@ def _save(data: dict[str, Any]) -> None:
 
 
 def _quick_topic(first_message: str) -> str:
-    """Generate a short heuristic topic without calling an LLM."""
+    """Genere un titre court sans appel LLM.
+
+    Parametres:
+        first_message: Premier message utilisateur de la session.
+    Retour:
+        Titre court exploitable dans la liste des conversations.
+    """
     words = first_message.strip().split()
     topic = " ".join(words[:6])
     return topic[:60] + ("..." if len(words) > 6 else "")
 
 
 def create_session() -> str:
-    """Create a new chat session and return its id."""
+    """Cree une nouvelle session de chat.
+
+    Parametres:
+        Aucun.
+    Retour:
+        Identifiant court de la session creee.
+    """
     sessions = _load()
     session_id = str(uuid.uuid4())[:8]
     now = datetime.now().isoformat()
@@ -59,13 +85,21 @@ def add_message(
     session_id: str,
     role: str,
     content: str,
-    user_id: str | None = None,
+    user_id: str,
 ) -> None:
-    """Add a message to a session, creating the session when needed.
+    """Ajoute un message utilisateur-scope a une session.
 
-    When an assistant response is saved, the latest user message is routed
-    to the user memory layer if a user id is attached to the session. This
-    is best effort and never blocks chat history persistence.
+    Cette fonction garantit que chaque message persiste contient le
+    `user_id`. Elle maintient aussi la coherence session-utilisateur:
+    une session deja associee a un utilisateur ne peut pas etre enrichie
+    avec les messages d'un autre utilisateur.
+    Parametres:
+        session_id: Identifiant de la session de conversation.
+        role: Role du message, par exemple `user` ou `assistant`.
+        content: Contenu textuel a persister.
+        user_id: Identifiant Supabase du proprietaire de la session.
+    Retour:
+        Aucun.
     """
     sessions = _load()
     if session_id not in sessions:
@@ -75,17 +109,19 @@ def add_message(
             "topic": "Nouvelle conversation",
             "created_at": now,
             "updated_at": now,
+            "user_id": user_id,
             "messages": [],
         }
 
     session = sessions[session_id]
-    if user_id:
-        session["user_id"] = user_id
+    if not _ensure_session_user(session, user_id):
+        return
 
     session["messages"].append(
         {
             "role": role,
             "content": content,
+            "user_id": user_id,
             "timestamp": datetime.now().isoformat(),
         }
     )
@@ -101,13 +137,25 @@ def add_message(
 
 
 def get_session(session_id: str) -> Optional[dict[str, Any]]:
-    """Return a persisted chat session by id."""
+    """Retourne une session de conversation par identifiant.
+
+    Parametres:
+        session_id: Identifiant de la session recherchee.
+    Retour:
+        Session trouvee ou None.
+    """
     sessions = _load()
     return sessions.get(session_id)
 
 
 def list_sessions(limit: int = 30) -> list[dict[str, Any]]:
-    """List sessions, newest first."""
+    """Liste les sessions les plus recentes.
+
+    Parametres:
+        limit: Nombre maximal de sessions retournees.
+    Retour:
+        Liste compacte des sessions pour affichage ou navigation.
+    """
     sessions = _load()
     items = sorted(
         sessions.values(),
@@ -128,7 +176,13 @@ def list_sessions(limit: int = 30) -> list[dict[str, Any]]:
 
 
 def delete_session(session_id: str) -> bool:
-    """Delete a chat session by id."""
+    """Supprime une session de conversation.
+
+    Parametres:
+        session_id: Identifiant de la session a supprimer.
+    Retour:
+        True si une session a ete supprimee, False sinon.
+    """
     sessions = _load()
     if session_id in sessions:
         del sessions[session_id]
@@ -138,7 +192,14 @@ def delete_session(session_id: str) -> bool:
 
 
 def update_session_topic(session_id: str, new_topic: str) -> bool:
-    """Manually update a chat session topic."""
+    """Met a jour manuellement le titre d'une session.
+
+    Parametres:
+        session_id: Identifiant de la session.
+        new_topic: Nouveau titre a enregistrer.
+    Retour:
+        True si la session existe et a ete modifiee.
+    """
     sessions = _load()
     if session_id in sessions:
         sessions[session_id]["topic"] = new_topic
@@ -149,7 +210,13 @@ def update_session_topic(session_id: str, new_topic: str) -> bool:
 
 
 async def generate_smart_topic(session_id: str) -> Optional[str]:
-    """Generate a smarter short topic via LLM after a few messages."""
+    """Genere un titre court via LLM apres plusieurs messages.
+
+    Parametres:
+        session_id: Identifiant de la session a analyser.
+    Retour:
+        Titre genere, ou None si la generation echoue.
+    """
     session = get_session(session_id)
     if not session or len(session["messages"]) < 2:
         return None
@@ -176,7 +243,15 @@ async def generate_smart_topic(session_id: str) -> Optional[str]:
 
 
 def _store_recent_user_memory_best_effort(session: dict[str, Any]) -> None:
-    """Store the latest user message when it contains stable personal facts."""
+    """Stocke le dernier message utilisateur si une memoire utile est detectee.
+
+    Cette operation est volontairement best effort: aucune erreur Supabase,
+    validation ou reseau ne doit interrompre le flux de chat.
+    Parametres:
+        session: Session locale contenant les messages et le proprietaire.
+    Retour:
+        Aucun.
+    """
     try:
         user_id = session.get("user_id")
         if not user_id:
@@ -184,6 +259,8 @@ def _store_recent_user_memory_best_effort(session: dict[str, Any]) -> None:
 
         user_message = _latest_user_message(session)
         if not user_message or not should_store_memory(user_message):
+            return
+        if _has_similar_memory(str(user_id), user_message):
             return
 
         memory = format_memory(user_message, str(user_id))
@@ -198,8 +275,62 @@ def _store_recent_user_memory_best_effort(session: dict[str, Any]) -> None:
 
 
 def _latest_user_message(session: dict[str, Any]) -> str | None:
-    """Return the most recent user message from a chat session."""
+    """Retourne le dernier message utilisateur d'une session.
+
+    Parametres:
+        session: Session locale a parcourir.
+    Retour:
+        Contenu du dernier message utilisateur, ou None.
+    """
     for message in reversed(session.get("messages", [])):
         if message.get("role") == "user":
             return message.get("content")
     return None
+
+
+def _ensure_session_user(session: dict[str, Any], user_id: str) -> bool:
+    """Valide et fixe le proprietaire d'une session.
+
+    Cette fonction evite qu'une session existante soit reutilisee par un
+    autre utilisateur. En cas de conflit, l'ecriture est ignoree pour ne
+    jamais faire echouer le chat principal.
+    Parametres:
+        session: Session locale cible.
+        user_id: Utilisateur authentifie courant.
+    Retour:
+        True si l'ecriture peut continuer, False en cas de conflit.
+    """
+    existing_user_id = session.get("user_id")
+    if existing_user_id and str(existing_user_id) != str(user_id):
+        return False
+    session["user_id"] = user_id
+    return True
+
+
+def _has_similar_memory(user_id: str, content: str) -> bool:
+    """Detecte les doublons evidents avant insertion memoire.
+
+    Parametres:
+        user_id: Proprietaire des memoires a comparer.
+        content: Nouveau contenu candidat.
+    Retour:
+        True si une memoire similaire existe deja.
+    """
+    try:
+        normalized_content = _normalize_for_duplicate(content)
+        for memory in get_user_memories(user_id):
+            existing = _normalize_for_duplicate(str(memory.get("content", "")))
+            if not existing:
+                continue
+            if normalized_content in existing or existing in normalized_content:
+                return True
+            if score_memory_relevance(content, memory) >= 0.82:
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def _normalize_for_duplicate(text: str) -> str:
+    """Normalise un texte pour une comparaison de doublons rapide."""
+    return " ".join(text.strip().lower().split())
