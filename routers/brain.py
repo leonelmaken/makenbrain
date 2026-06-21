@@ -167,11 +167,24 @@ async def expert_chat(req: ExpertChatRequest):
     )
 
     response = await groq_generate(req.question, context, system_prompt=system)
+    from core.consciousness import consciousness
+
+    response_evaluation = consciousness.evaluate_response(
+        question=req.question,
+        answer=response,
+        user_memory_count=0,
+        supabase_data_count=0,
+        vector_memory_count=len(relevant),
+        graph_context_count=len(context_parts),
+    )
 
     return {
         "question":      req.question,
         "domain":        req.domain or "général",
-        "response":      response,
+        "response":      response_evaluation["answer"],
+        "confidence":    response_evaluation["confidence"],
+        "risk_level":    response_evaluation["risk_level"],
+        "suggested_sources": response_evaluation["suggested_sources"],
         "sources_used":  len(relevant),
         "model":         "llama-3.3-70b-versatile (Groq)",
         "context_used":  len(context) > 0,

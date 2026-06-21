@@ -7,7 +7,7 @@ import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 
 from core.llm import generate, check_ollama_status
@@ -45,6 +45,9 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     response: str
+    confidence: float = 0.0
+    risk_level: str = "high"
+    suggested_sources: list[dict[str, str]] = Field(default_factory=list)
     memories_used: int
     graph_concepts: list[str]
     model: str
@@ -118,7 +121,9 @@ async def chat(
         str(current_user.id),
         request.message,
     )
+    user_memory_count = 0
     if user_memory_context:
+        user_memory_count = len(user_memory_context.splitlines())
         context_parts.append(f"--- MEMOIRE UTILISATEUR ---\n{user_memory_context}")
         context_preview.extend(
             [
@@ -173,6 +178,9 @@ async def chat(
                 chosen,
                 background_tasks,
                 str(current_user.id),
+                user_memory_count,
+                memories_used,
+                len(graph_concepts),
             ),
             media_type="text/event-stream"
         )
@@ -185,6 +193,16 @@ async def chat(
         response_text = await generate(request.message, context)
         model_name    = settings.OLLAMA_MODEL + " (local)"
 
+    response_evaluation = consciousness.evaluate_response(
+        question=request.message,
+        answer=response_text,
+        user_memory_count=user_memory_count,
+        supabase_data_count=user_memory_count,
+        vector_memory_count=memories_used,
+        graph_context_count=len(graph_concepts),
+    )
+    response_text = response_evaluation["answer"]
+
     # Sauvegarder dans l'historique de conversation
     if request.session_id:
         add_message(request.session_id, "user", request.message, str(current_user.id))
@@ -193,6 +211,9 @@ async def chat(
 
     return ChatResponse(
         response        = response_text,
+        confidence      = response_evaluation["confidence"],
+        risk_level      = response_evaluation["risk_level"],
+        suggested_sources = response_evaluation["suggested_sources"],
         memories_used   = memories_used,
         graph_concepts  = list(set(graph_concepts))[:10],
         model           = model_name,
@@ -209,6 +230,9 @@ async def chat_streamer(
     chosen: str,
     background_tasks: BackgroundTasks,
     user_id: str,
+    user_memory_count: int,
+    memories_used: int,
+    graph_context_count: int,
 ):
     """Générateur SSE pour le streaming token-par-token."""
     full_response = ""
@@ -227,13 +251,34 @@ async def chat_streamer(
             full_response += token
             yield f"data: {json.dumps({'token': token})}\n\n"
 
+    response_evaluation = consciousness.evaluate_response(
+        question=request.message,
+        answer=full_response,
+        user_memory_count=user_memory_count,
+        supabase_data_count=user_memory_count,
+        vector_memory_count=memories_used,
+        graph_context_count=graph_context_count,
+    )
+    yield (
+        "data: "
+        + json.dumps(
+            {
+                "confidence": response_evaluation["confidence"],
+                "risk_level": response_evaluation["risk_level"],
+                "suggested_sources": response_evaluation["suggested_sources"],
+                "final_response": response_evaluation["answer"],
+            }
+        )
+        + "\n\n"
+    )
+
     # Fin du stream
     yield "data: [DONE]\n\n"
 
     # Sauvegarde historique (une fois le stream fini)
     if request.session_id:
         add_message(request.session_id, "user", request.message, user_id)
-        add_message(request.session_id, "assistant", full_response, user_id)
+        add_message(request.session_id, "assistant", response_evaluation["answer"], user_id)
         background_tasks.add_task(generate_smart_topic, request.session_id)
 
 

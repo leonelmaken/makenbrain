@@ -9,13 +9,16 @@ from typing import Any
 from core.graph import neuron_graph
 from core.llm import generate
 from core.memory_router import score_memory_relevance
+from core.response_confidence import build_confidence_payload, calculate_confidence
+from core.self_critic import analyze_answer, has_uncertainty
+from core.source_router import suggest_sources
 from core.user_memory_service import get_user_memories
 
 logger = logging.getLogger("makenbrain.consciousness")
 
 
 class BrainConsciousness:
-    """Couche proactive qui observe les evenements et propose des insights."""
+    """Couche proactive qui observe, contextualise et evalue les reponses."""
 
     def __init__(self) -> None:
         """Initialise l'etat d'execution de la conscience.
@@ -62,10 +65,21 @@ class BrainConsciousness:
 
         try:
             insight = await generate(prompt)
+            evaluation = self.evaluate_response(
+                question=event_context,
+                answer=insight,
+                user_memory_count=len(memory_context.splitlines()) if memory_context else 0,
+                supabase_data_count=1 if user_id and memory_context else 0,
+                vector_memory_count=0,
+                graph_context_count=1,
+            )
             self.pending_insights.append(
                 {
                     "timestamp": datetime.now().isoformat(),
-                    "insight": insight,
+                    "insight": evaluation["answer"],
+                    "confidence": evaluation["confidence"],
+                    "risk_level": evaluation["risk_level"],
+                    "suggested_sources": evaluation["suggested_sources"],
                     "type": event_type,
                     "user_id": user_id,
                 }
@@ -189,6 +203,64 @@ class BrainConsciousness:
             relevant = [memory for _, memory in scored_memories]
         return relevant[:limit]
 
+    def evaluate_response(
+        self,
+        *,
+        question: str,
+        answer: str,
+        user_memory_count: int = 0,
+        supabase_data_count: int = 0,
+        vector_memory_count: int = 0,
+        graph_context_count: int = 0,
+    ) -> dict[str, Any]:
+        """Evalue, corrige et enrichit une reponse avant exposition.
+
+        Cette methode applique la regle de base du cerveau: repondre,
+        evaluer la reponse, indiquer la confiance et proposer des sources
+        lorsque l'incertitude ou la complexite le justifie.
+        """
+        context_available = any(
+            count > 0
+            for count in (
+                user_memory_count,
+                supabase_data_count,
+                vector_memory_count,
+                graph_context_count,
+            )
+        )
+        confidence = calculate_confidence(
+            answer=answer,
+            user_memory_count=user_memory_count,
+            supabase_data_count=supabase_data_count,
+            vector_memory_count=vector_memory_count,
+            graph_context_count=graph_context_count,
+            uncertainty_detected=has_uncertainty(answer),
+        )
+        critic = analyze_answer(
+            answer,
+            context_available=context_available,
+            confidence=confidence,
+        )
+        final_answer = critic["answer"]
+        if critic["corrected"]:
+            confidence = calculate_confidence(
+                answer=final_answer,
+                user_memory_count=user_memory_count,
+                supabase_data_count=supabase_data_count,
+                vector_memory_count=vector_memory_count,
+                graph_context_count=graph_context_count,
+                uncertainty_detected=True,
+            )
+
+        payload = build_confidence_payload(final_answer, confidence)
+        payload["suggested_sources"] = suggest_sources(
+            question=question,
+            confidence=confidence,
+            critic_issues=critic["issues"],
+        )
+        payload["critic_issues"] = critic["issues"]
+        return payload
+
     @staticmethod
     def build_system_prompt(memory_context: str = "") -> str:
         """Construit le prompt systeme avec memoire personnelle optionnelle.
@@ -201,7 +273,9 @@ class BrainConsciousness:
         base_prompt = (
             "Tu es la conscience proactive de MakenBrain. "
             "Tu aides MAKEN en tenant compte du contexte personnel disponible, "
-            "sans inventer de souvenirs absents."
+            "sans inventer de souvenirs absents. "
+            "Quand les donnees manquent, tu signales l'incertitude et tu "
+            "formules des hypotheses plutot que des certitudes."
         )
         if not memory_context:
             return base_prompt
