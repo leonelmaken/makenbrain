@@ -1,6 +1,10 @@
 """
 Watcher de fichiers — le cerveau surveille tes dossiers et apprend automatiquement.
 Utilise Watchdog pour détecter les créations et modifications de fichiers.
+
+Architecture :
+Ce module dépend uniquement de 'core.ingestion'.
+Aucune dépendance vers 'routers' n'est autorisée.
 """
 import asyncio
 import logging
@@ -8,6 +12,10 @@ from datetime import datetime
 from pathlib import Path
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
+
+# Import corrigé : Plus de dépendance vers routers.files
+from core.ingestion import ingest_single_file
+from core.consciousness import consciousness
 
 logger = logging.getLogger("makenbrain.watcher")
 
@@ -45,10 +53,11 @@ class BrainEventHandler(FileSystemEventHandler):
 
 
 async def _auto_ingest(file_path: str, event_type: str) -> None:
-    """Ingère automatiquement un fichier modifié."""
-    from routers.files import ingest_single_file
+    """Ingère automatiquement un fichier modifié via le core centralisé."""
     try:
+        # Appel direct à la fonction centrale
         result = await ingest_single_file(file_path)
+        
         entry = {
             "timestamp": datetime.now().isoformat(),
             "file": Path(file_path).name,
@@ -60,11 +69,11 @@ async def _auto_ingest(file_path: str, event_type: str) -> None:
             "status": "ok",
         }
         _ingestion_log.append(entry)
+        
         if not result.get("skipped"):
             logger.info(f"Auto-ingéré [{event_type}]: {Path(file_path).name} ({result.get('chunks_created', 0)} fragments)")
             
             # --- CONNECTION AU COEUR DE CONSCIENCE ---
-            from core.consciousness import consciousness
             asyncio.create_task(consciousness.observe_event(
                 event_type=f"file_{event_type}",
                 data={
