@@ -3,25 +3,12 @@ import httpx
 from fastapi import APIRouter, HTTPException
 from bs4 import BeautifulSoup
 from models.schemas import IngestTextRequest, IngestUrlRequest, IngestResponse
+from core.ingestion import chunk_text
 from core.memory import add_memory
 
 router = APIRouter()
 
 
-def chunk_text(text: str, chunk_size: int = 400) -> list[str]:
-    """Découpe le texte en fragments cohérents (sur fins de phrase)."""
-    sentences = re.split(r'(?<=[.!?])\s+', text.strip())
-    chunks, current = [], ""
-    for s in sentences:
-        if len(current) + len(s) + 1 <= chunk_size:
-            current = current + " " + s if current else s
-        else:
-            if current:
-                chunks.append(current.strip())
-            current = s
-    if current:
-        chunks.append(current.strip())
-    return [c for c in chunks if len(c) > 20]
 
 
 @router.post("/text", response_model=IngestResponse)

@@ -232,7 +232,7 @@ async def wikipedia_ingest(query: str, lang: str = "fr") -> dict:
     """Cherche sur Wikipedia et ingère le résultat directement en mémoire."""
     from core.memory import add_memory
     from core.dedup import is_duplicate, register
-    from routers.files import chunk_text
+    from core.ingestion import chunk_text
 
     result = await wikipedia_search(query, lang)
     if not result.get("found"):

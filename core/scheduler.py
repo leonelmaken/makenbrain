@@ -68,7 +68,7 @@ async def run_auto_research(cfg: dict) -> dict:
 
     # 2. Requêtes de veille personnalisées
     from duckduckgo_search import DDGS
-    from routers.files import chunk_text
+    from core.ingestion import chunk_text
     from core.memory import add_memory
     from core.dedup import is_duplicate, register
 

@@ -220,8 +220,7 @@ async def explore_domain(
     depth='standard' → 5 requêtes, pages complètes
     depth='expert'   → 8 requêtes, Wikipedia + pages + résumés LLM
     """
-    from routers.search import web_search
-    from models.schemas import WebSearchRequest as WSReq
+    from core.web_search import search_and_ingest
 
     # Trouver le domaine correspondant
     domain_key = None
@@ -256,14 +255,13 @@ async def explore_domain(
 
     for q in queries:
         try:
-            req = WSReq(
+            r = await search_and_ingest(
                 query=q,
                 max_results=3,
                 fetch_pages=fetch,
                 auto_summarize=False,
                 tags=f"domaine,{domain_key}",
             )
-            r = await web_search(req)
             ingested += r.get("ingested", 0)
             results.append({"query": q, "ingested": r.get("ingested", 0)})
         except Exception as e:

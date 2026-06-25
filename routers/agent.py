@@ -127,7 +127,7 @@ async def read_file(req: ReadRequest):
     ingest_result = None
     if req.auto_ingest and not is_duplicate(content):
         register(content)
-        from routers.files import chunk_text
+        from core.ingestion import chunk_text
         for chunk in chunk_text(content):
             await add_memory(chunk, metadata={
                 "source": str(p), "title": p.name,

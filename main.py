@@ -12,7 +12,7 @@ from core.config import settings
 from core.memory import init_memory
 from core.version import APP_NAME, APP_RELEASE_NAME, APP_VERSION
 from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain, video, identity, audit, users
-
+from routers import reasoning
 # Force l'encodage UTF-8 sur stdout/stderr, quel que soit le code page actif
 # de la console Windows (cp1252 par défaut en environnement francophone).
 # Sans ça, le moindre print() contenant un emoji (utilisés dans tout le
@@ -102,6 +102,7 @@ app.include_router(agent.router,    prefix="/agent",    tags=["🤖 Agent Fichie
 app.include_router(analysis.router, prefix="/analysis", tags=["🔍 Analyse & Validation"])
 app.include_router(brain.router,    prefix="/brain",    tags=["🧠 Expertise & Autonomie"])
 app.include_router(video.router,    prefix="/video",    tags=["🎬 Génération Vidéo"])
+app.include_router(reasoning.router, prefix="/reasoning", tags=["🧠 Raisonnement Expert"])
 
 app.include_router(users.router, tags=["Users"])
 app.include_router(audit.router,    prefix="/audit",    tags=["Audit"], dependencies=SECURE)
