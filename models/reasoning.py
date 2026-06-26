@@ -1,11 +1,18 @@
 """DTOs Pydantic pour le moteur de raisonnement expert de MakenBrain.
 
-Phase 3.0 — Expert Reasoning Engine.
+Phase 3.0 / 3.1 — Expert Reasoning Engine.
 
 Règles strictes :
 - Zéro logique métier dans ce module.
 - Zéro import depuis core/ ou routers/.
-- Ce module est la source de vérité des contrats de données Phase 3.0.
+- Ce module est la source de vérité des contrats de données Phase 3.x.
+
+Historique :
+- Phase 3.0 : modèles initiaux (QuestionAnalysis, Hypothesis, Evidence, …)
+- Phase 3.1 : QuestionAnalysis enrichi (domain, risk_level, requires_memory,
+              requires_external_search, requires_deep_reasoning, confidence).
+              Tous les nouveaux champs ont des valeurs par défaut →
+              rétrocompatibilité garantie.
 """
 from __future__ import annotations
 
@@ -20,14 +27,14 @@ from pydantic import BaseModel, ConfigDict, Field
 # ── Énumérations ──────────────────────────────────────────────────────────────
 
 class QuestionType(str, Enum):
-    """Type sémantique de la question analysée."""
+    """Type sémantique de la question analysée par QuestionAnalyzer."""
 
-    FACTUAL      = "factual"       # "Qu'est-ce que X ?"
-    ANALYTICAL   = "analytical"    # "Pourquoi X ?" / "Qu'est-ce qui cause Y ?"
-    COMPARATIVE  = "comparative"   # "X vs Y ?" / "Différence entre X et Y ?"
-    PROCEDURAL   = "procedural"    # "Comment faire X ?" / "Étapes pour Y ?"
-    HYPOTHETICAL = "hypothetical"  # "Que se passerait-il si X ?"
-    EVALUATIVE   = "evaluative"    # "Quelle est la meilleure approche pour X ?"
+    FACTUAL      = "factual"       # « Qu'est-ce que X ? »
+    ANALYTICAL   = "analytical"    # « Pourquoi X ? » / « Qu'est-ce qui cause Y ? »
+    COMPARATIVE  = "comparative"   # « X vs Y ? » / « Différence entre X et Y ? »
+    PROCEDURAL   = "procedural"    # « Comment faire X ? » / « Étapes pour Y ? »
+    HYPOTHETICAL = "hypothetical"  # « Que se passerait-il si X ? »
+    EVALUATIVE   = "evaluative"    # « Quelle est la meilleure approche pour X ? »
 
 
 class EvidenceSourceType(str, Enum):
@@ -35,8 +42,8 @@ class EvidenceSourceType(str, Enum):
 
     VECTOR_MEMORY = "vector_memory"   # ChromaDB
     NEURON_GRAPH  = "neuron_graph"    # NetworkX
-    USER_MEMORY   = "user_memory"     # Supabase mémoires utilisateur
-    EXTERNAL      = "external"        # Futur : web, API tierces
+    USER_MEMORY   = "user_memory"     # Supabase — mémoires utilisateur
+    EXTERNAL      = "external"        # Futur : web, APIs tierces
 
 
 class EvidenceRelation(str, Enum):
@@ -50,15 +57,54 @@ class EvidenceRelation(str, Enum):
 # ── Modèles intermédiaires (résultats d'étapes du pipeline) ───────────────────
 
 class QuestionAnalysis(BaseModel):
-    """Résultat de l'étape 1 — QuestionAnalyzer."""
+    """Résultat de l'étape 1 — QuestionAnalyzer (Phase 3.1).
 
+    Champs hérités de Phase 3.0 :
+        original_question  : Texte brut de la question.
+        question_type      : Type sémantique (enum QuestionType).
+        complexity_score   : Score de complexité [0.0 → 1.0].
+        sub_questions      : Sous-questions extraites ou générées.
+        key_entities       : Entités nommées détectées.
+        key_concepts       : Concepts clés pour la recherche vectorielle.
+        requires_reasoning : True si un raisonnement approfondi est requis.
+
+    Champs ajoutés en Phase 3.1 (tous avec valeur par défaut → rétrocompat.) :
+        domain                   : Domaine métier détecté.
+        risk_level               : Niveau de risque associé à la réponse.
+        requires_memory          : Mémoire utilisateur utile pour répondre.
+        requires_external_search : Recherche web externe recommandée.
+        requires_deep_reasoning  : Raisonnement en 5 étapes requis.
+        confidence               : Confiance de l'analyse elle-même [0.0 → 1.0].
+    """
+
+    # ── Champs Phase 3.0 ──────────────────────────────────────────────────────
     original_question  : str
     question_type      : QuestionType
-    complexity_score   : float              = Field(ge=0.0, le=1.0)
-    sub_questions      : list[str]          = Field(default_factory=list)
-    key_entities       : list[str]          = Field(default_factory=list)
-    key_concepts       : list[str]          = Field(default_factory=list)
-    requires_reasoning : bool               = False
+    complexity_score   : float     = Field(ge=0.0, le=1.0)
+    sub_questions      : list[str] = Field(default_factory=list)
+    key_entities       : list[str] = Field(default_factory=list)
+    key_concepts       : list[str] = Field(default_factory=list)
+    requires_reasoning : bool      = False
+
+    # ── Champs Phase 3.1 (tous optionnels avec défaut) ────────────────────────
+    domain                   : str   = "general"
+    """Domaine métier : technique | finance | santé | droit | science | general."""
+
+    risk_level               : str   = "low"
+    """Niveau de risque de la réponse : low | medium | high."""
+
+    requires_memory          : bool  = False
+    """True si la mémoire utilisateur (Supabase) est pertinente pour répondre."""
+
+    requires_external_search : bool  = False
+    """True si une recherche web externe est recommandée."""
+
+    requires_deep_reasoning  : bool  = False
+    """True si le pipeline complet en 5 étapes est nécessaire (complexity >= 0.6)."""
+
+    confidence               : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Confiance de l'analyse de la question elle-même [0.0 → 1.0].
+    Réduite à 0.6 en mode fallback déterministe (sans LLM)."""
 
 
 class Hypothesis(BaseModel):
@@ -84,11 +130,11 @@ class Evidence(BaseModel):
 class EvidenceEvaluation(BaseModel):
     """Résultat de l'étape 4 — EvidenceEvaluator."""
 
-    total_evidence_count  : int               = 0
+    total_evidence_count  : int                   = 0
     contradictions        : list[tuple[str, str]] = Field(default_factory=list)
-    knowledge_gaps        : list[str]         = Field(default_factory=list)
-    overall_quality_score : float             = Field(default=0.0, ge=0.0, le=1.0)
-    best_hypothesis_id    : str | None        = None
+    knowledge_gaps        : list[str]             = Field(default_factory=list)
+    overall_quality_score : float                 = Field(default=0.0, ge=0.0, le=1.0)
+    best_hypothesis_id    : str | None            = None
 
 
 class ReasoningStepRecord(BaseModel):
@@ -107,7 +153,7 @@ class ReasoningTrace(BaseModel):
     """Trace complète d'exécution du pipeline de raisonnement.
 
     Peuplée en continu par chaque étape. Exposée dans la réponse API
-    uniquement si include_trace=True.
+    uniquement si include_trace=True (opt-in, coûteux).
     """
 
     trace_id               : str      = Field(default_factory=lambda: uuid4().hex)

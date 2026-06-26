@@ -1,6 +1,6 @@
 """Orchestrateur du pipeline de raisonnement expert de MakenBrain.
 
-Phase 3.0 — Sprint 1 : infrastructure du pipeline (stub).
+Phase 3.1 — QuestionAnalyzerAgent branché dans DEFAULT_PIPELINE.
 
 Responsabilités de ce module :
 - Instancier et exécuter les agents dans l'ordre du pipeline.
@@ -9,14 +9,21 @@ Responsabilités de ce module :
 - Sérialiser le ReasoningContext en ReasoningResponse via context_to_response().
 
 Ce module NE contient PAS de logique métier. Toute logique métier appartient
-aux modules d'étape : question_analyzer, hypothesis_engine, evidence_collector,
-evidence_evaluator, synthesizer. Ils seront branchés à partir du Sprint 2.
+aux modules d'étape individuels.
 
 Dépendances autorisées :
-✓ core.reasoning.context
-✓ models.reasoning
-✗ routers/  (jamais)
-✗ Logique métier directe (jamais dans cet orchestrateur)
+    ✓ core.reasoning.context
+    ✓ core.reasoning.question_analyzer  (Phase 3.1)
+    ✓ models.reasoning
+    ✗ routers/  (jamais)
+    ✗ Logique métier directe (jamais dans cet orchestrateur)
+
+État du pipeline par phase :
+    Phase 3.0 : DEFAULT_PIPELINE = []  (stub)
+    Phase 3.1 : DEFAULT_PIPELINE = [QuestionAnalyzerAgent()]
+    Phase 3.2 : + HypothesisEngineAgent()
+    Phase 3.3 : + EvidenceCollectorAgent(), EvidenceEvaluatorAgent()
+    Phase 3.4 : + SynthesizerAgent()
 """
 from __future__ import annotations
 
@@ -24,6 +31,7 @@ import logging
 import time
 
 from core.reasoning.context import ReasoningContext
+from core.reasoning.question_analyzer import QuestionAnalyzerAgent
 from models.reasoning import (
     QuestionType,
     ReasoningRequest,
@@ -34,12 +42,15 @@ from models.reasoning import (
 logger = logging.getLogger("makenbrain.reasoning_engine")
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
-# Liste des agents à exécuter dans l'ordre.
-# Vide en Sprint 1 — les agents seront ajoutés au fil des sprints :
-#   Sprint 2 : QuestionAnalyzerAgent, HypothesisEngineAgent
-#   Sprint 3 : EvidenceCollectorAgent, EvidenceEvaluatorAgent
-#   Sprint 4 : SynthesizerAgent
-DEFAULT_PIPELINE: list = []  # type: ignore[type-arg]
+# Chaque entrée doit implémenter le protocole ReasoningAgent
+# (core.reasoning.__init__.ReasoningAgent).
+DEFAULT_PIPELINE = [
+    QuestionAnalyzerAgent(),   # Phase 3.1 — étape 1 : analyse de la question
+    # HypothesisEngineAgent(), # Phase 3.2 — étape 2 : génération d'hypothèses
+    # EvidenceCollectorAgent(),# Phase 3.3 — étape 3 : collecte de preuves
+    # EvidenceEvaluatorAgent(),# Phase 3.3 — étape 4 : évaluation des preuves
+    # SynthesizerAgent(),      # Phase 3.4 — étape 5 : synthèse raisonnée
+]
 
 
 async def run_reasoning(
@@ -48,18 +59,16 @@ async def run_reasoning(
 ) -> ReasoningContext:
     """Exécute le pipeline de raisonnement complet.
 
-    Sprint 1 : le pipeline est vide (DEFAULT_PIPELINE = []). La fonction
-    initialise le contexte, parcourt le pipeline (aucune itération),
-    finalise la trace et retourne le contexte.
-
-    Les agents seront branchés à partir du Sprint 2.
+    Initialise le contexte, exécute chaque agent dans l'ordre, gère les
+    erreurs partielles (mode dégradé), finalise la trace et retourne le
+    contexte enrichi.
 
     Args:
         request  : Requête de raisonnement validée par Pydantic.
         user_id  : Identifiant Supabase de l'utilisateur authentifié.
 
     Returns:
-        ReasoningContext peuplé avec les résultats disponibles.
+        ReasoningContext peuplé avec les résultats de toutes les étapes.
     """
     ctx = ReasoningContext(request=request, user_id=user_id)
     ctx.initialize_trace()
@@ -73,15 +82,12 @@ async def run_reasoning(
     pipeline_start = time.monotonic()
 
     for agent in DEFAULT_PIPELINE:
-        step_start = time.monotonic()
         try:
             ctx = await agent.run(ctx)
         except Exception as exc:  # noqa: BLE001
-            step_ms = (time.monotonic() - step_start) * 1000
             logger.error(
-                "[REASONING] Étape '%s' en erreur (%.0fms) : %s",
+                "[REASONING] Agent '%s' en erreur non gérée : %s",
                 agent.name,
-                step_ms,
                 exc,
             )
             ctx.mark_degraded(agent.name, str(exc))
@@ -93,7 +99,8 @@ async def run_reasoning(
     ctx.trace.evidence_quality_score = ctx.evidence_quality_score
 
     logger.info(
-        "[REASONING] Pipeline terminé | %.0fms | dégradé=%s | preuves=%d | hypothèses=%d",
+        "[REASONING] Pipeline terminé | %.0fms | dégradé=%s | "
+        "preuves=%d | hypothèses=%d",
         ctx.trace.total_duration_ms,
         ctx.pipeline_degraded,
         len(ctx.evidence),
@@ -139,24 +146,22 @@ def context_to_response(ctx: ReasoningContext) -> ReasoningResponse:
 # ── Helpers privés ────────────────────────────────────────────────────────────
 
 def _stub_answer(ctx: ReasoningContext) -> str:
-    """Réponse temporaire tant que les agents du pipeline ne sont pas implémentés.
-
-    Remplacée dès que le Synthesizer (Sprint 4) est branché.
-    """
+    """Réponse temporaire tant que le Synthesizer (Phase 3.4) n'est pas branché."""
+    analysis = ctx.analysis_or_fallback
     return (
-        f"Moteur de raisonnement initialisé (Phase 3.0 — Sprint 1). "
-        f"Pipeline en cours d'implémentation. "
-        f"Question reçue : {ctx.request.question}"
+        f"[Phase 3.1 — Synthesizer non encore implémenté] "
+        f"Question analysée : type={analysis.question_type.value}, "
+        f"domaine={analysis.domain}, "
+        f"complexité={analysis.complexity_score:.2f}, "
+        f"risque={analysis.risk_level}."
     )
 
 
 def _compute_risk_level(confidence: float) -> str:
     """Convertit un score de confiance en niveau de risque lisible.
 
-    Seuils alignés sur core/response_confidence.py existant :
-    - >= 0.75 → low
-    - >= 0.60 → medium
-    - <  0.60 → high
+    Seuils alignés sur core/response_confidence.py :
+        >= 0.75 → low | >= 0.60 → medium | < 0.60 → high
     """
     if confidence >= 0.75:
         return "low"
@@ -167,30 +172,39 @@ def _compute_risk_level(confidence: float) -> str:
 
 def _build_summary(ctx: ReasoningContext) -> str:
     """Construit un résumé en prose du raisonnement effectué."""
+    analysis = ctx.analysis
     parts: list[str] = []
 
-    if ctx.analysis:
+    if analysis:
         parts.append(
-            f"Question de type '{ctx.analysis.question_type.value}' "
-            f"(complexité : {ctx.analysis.complexity_score:.2f})."
+            f"Question de type '{analysis.question_type.value}' "
+            f"dans le domaine '{analysis.domain}' "
+            f"(complexité : {analysis.complexity_score:.2f}, "
+            f"risque : {analysis.risk_level})."
         )
+        if analysis.requires_memory:
+            parts.append("Mémoire utilisateur consultée.")
+        if analysis.requires_external_search:
+            parts.append("Recherche externe recommandée.")
+        if analysis.requires_deep_reasoning:
+            parts.append("Raisonnement approfondi requis.")
+
     if ctx.hypotheses:
         parts.append(f"{len(ctx.hypotheses)} hypothèse(s) évaluée(s).")
     if ctx.evidence:
         parts.append(f"{len(ctx.evidence)} preuve(s) collectée(s).")
     if ctx.pipeline_degraded:
-        parts.append("Avertissement : pipeline en mode dégradé.")
+        parts.append("⚠ Pipeline en mode dégradé.")
 
-    return " ".join(parts) or "Pipeline Sprint 1 — agents à implémenter (Sprint 2+)."
+    return " ".join(parts) or "Analyse en cours (pipeline Phase 3.1)."
 
 
 def _best_hypothesis(ctx: ReasoningContext) -> str:
-    """Retourne le contenu de la meilleure hypothèse identifiée par l'évaluateur."""
+    """Retourne le contenu de la meilleure hypothèse identifiée."""
     if not ctx.hypotheses:
         return ""
     if ctx.evaluation and ctx.evaluation.best_hypothesis_id:
         for h in ctx.hypotheses:
             if h.hypothesis_id == ctx.evaluation.best_hypothesis_id:
                 return h.content
-    # Fallback : première hypothèse de la liste
     return ctx.hypotheses[0].content
