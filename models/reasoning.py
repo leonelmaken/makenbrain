@@ -108,12 +108,30 @@ class QuestionAnalysis(BaseModel):
 
 
 class Hypothesis(BaseModel):
-    """Une hypothèse candidate générée par HypothesisEngine (étape 2)."""
+    """Une hypothèse candidate générée par HypothesisEngine (étape 2).
+
+    Champs hérités de Phase 3.0 :
+        hypothesis_id : Identifiant unique (8 hex chars, auto-généré).
+        content       : Formulation textuelle de l'hypothèse.
+        initial_score : Score de plausibilité initial [0.0 → 1.0].
+        origin        : Source générique (ex. 'prior_knowledge', 'llm').
+
+    Champs ajoutés en Phase 3.2 (tous avec valeur par défaut → rétrocompat.) :
+        justification  : Explication de pourquoi cette hypothèse est plausible.
+        strategy_name  : Nom de la stratégie qui a généré cette hypothèse.
+    """
 
     hypothesis_id : str   = Field(default_factory=lambda: uuid4().hex[:8])
     content       : str
     initial_score : float = Field(default=0.5, ge=0.0, le=1.0)
     origin        : str   = "prior_knowledge"
+
+    # ── Champs Phase 3.2 (tous optionnels avec défaut) ────────────────────────
+    justification  : str = ""
+    """Explication concise de la plausibilité de l'hypothèse."""
+
+    strategy_name  : str = "unknown"
+    """Nom de la stratégie HypothesisEngine qui a produit cette hypothèse."""
 
 
 class Evidence(BaseModel):
