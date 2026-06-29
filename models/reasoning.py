@@ -54,6 +54,18 @@ class EvidenceRelation(str, Enum):
     NEUTRAL     = "neutral"
 
 
+class EvidenceType(str, Enum):
+    """Nature sémantique du contenu d'une preuve — Phase 3.3.
+
+    Permet à l'EvidenceValidator de pondérer différemment les faits
+    vérifiables, les suppositions et les opinions subjectives.
+    """
+
+    FACT       = "fact"        # Information vérifiable et objective.
+    HYPOTHESIS = "hypothesis"  # Supposition plausible, non encore vérifiée.
+    OPINION    = "opinion"     # Point de vue subjectif ou interprétation.
+
+
 # ── Modèles intermédiaires (résultats d'étapes du pipeline) ───────────────────
 
 class QuestionAnalysis(BaseModel):
@@ -144,6 +156,14 @@ class Evidence(BaseModel):
     relevance_score : float                        = Field(default=0.5, ge=0.0, le=1.0)
     relations       : dict[str, EvidenceRelation]  = Field(default_factory=dict)
 
+    # ── Champs Phase 3.3 (tous optionnels avec défaut → rétrocompat.) ─────────
+    credibility_score : float       = Field(default=0.5, ge=0.0, le=1.0)
+    """Crédibilité estimée de la source [0.0 → 1.0].
+    Modifiée par EvidenceRanker selon le type de preuve et la source."""
+
+    evidence_type     : EvidenceType = EvidenceType.FACT
+    """Nature sémantique du contenu (FACT / HYPOTHESIS / OPINION)."""
+
 
 class EvidenceEvaluation(BaseModel):
     """Résultat de l'étape 4 — EvidenceEvaluator."""
@@ -153,6 +173,14 @@ class EvidenceEvaluation(BaseModel):
     knowledge_gaps        : list[str]             = Field(default_factory=list)
     overall_quality_score : float                 = Field(default=0.0, ge=0.0, le=1.0)
     best_hypothesis_id    : str | None            = None
+
+    # ── Champs Phase 3.3 (tous optionnels avec défaut → rétrocompat.) ─────────
+    support_scores          : dict[str, float] = Field(default_factory=dict)
+    """Score de soutien net par hypothesis_id [0.0 → 1.0].
+    Calculé par EvidenceValidator : soutien - contradiction normalisés."""
+
+    evidence_per_hypothesis : dict[str, int]   = Field(default_factory=dict)
+    """Nombre de preuves (soutien + contradiction) par hypothesis_id."""
 
 
 class ReasoningStepRecord(BaseModel):

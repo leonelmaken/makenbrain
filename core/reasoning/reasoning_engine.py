@@ -1,28 +1,12 @@
 """Orchestrateur du pipeline de raisonnement expert de MakenBrain.
 
-Phase 3.2 — HypothesisEngineAgent ajouté au pipeline.
-
-Responsabilités de ce module :
-- Instancier et exécuter les agents dans l'ordre du pipeline.
-- Alimenter le ReasoningTrace à chaque étape (timing, résumé, succès).
-- Gérer les erreurs partielles (mode dégradé : le pipeline continue).
-- Sérialiser le ReasoningContext en ReasoningResponse via context_to_response().
-
-Ce module NE contient PAS de logique métier. Toute logique métier appartient
-aux modules d'étape individuels.
-
-Dépendances autorisées :
-    ✓ core.reasoning.context
-    ✓ core.reasoning.question_analyzer   (Phase 3.1)
-    ✓ core.reasoning.hypothesis_engine   (Phase 3.2)
-    ✓ models.reasoning
-    ✗ routers/  (jamais)
+Phase 3.3 — EvidenceEngineAgent ajouté au pipeline.
 
 État du pipeline par phase :
-    Phase 3.0 : DEFAULT_PIPELINE = []
-    Phase 3.1 : DEFAULT_PIPELINE = [QuestionAnalyzerAgent()]
-    Phase 3.2 : DEFAULT_PIPELINE = [QuestionAnalyzerAgent(), HypothesisEngineAgent()]
-    Phase 3.3 : + EvidenceCollectorAgent(), EvidenceEvaluatorAgent()
+    Phase 3.0 : []
+    Phase 3.1 : [QuestionAnalyzerAgent()]
+    Phase 3.2 : [QuestionAnalyzerAgent(), HypothesisEngineAgent()]
+    Phase 3.3 : [QuestionAnalyzerAgent(), HypothesisEngineAgent(), EvidenceEngineAgent()]
     Phase 3.4 : + SynthesizerAgent()
 """
 from __future__ import annotations
@@ -31,23 +15,18 @@ import logging
 import time
 
 from core.reasoning.context import ReasoningContext
+from core.reasoning.evidence_engine import EvidenceEngineAgent
 from core.reasoning.hypothesis_engine import HypothesisEngineAgent
 from core.reasoning.question_analyzer import QuestionAnalyzerAgent
-from models.reasoning import (
-    ReasoningRequest,
-    ReasoningResponse,
-)
+from models.reasoning import ReasoningRequest, ReasoningResponse
 
 logger = logging.getLogger("makenbrain.reasoning_engine")
 
-# ── Pipeline ──────────────────────────────────────────────────────────────────
-
 DEFAULT_PIPELINE = [
-    QuestionAnalyzerAgent(),   # Phase 3.1 — étape 1 : analyse de la question
-    HypothesisEngineAgent(),   # Phase 3.2 — étape 2 : génération d'hypothèses
-    # EvidenceCollectorAgent(),# Phase 3.3 — étape 3 : collecte de preuves
-    # EvidenceEvaluatorAgent(),# Phase 3.3 — étape 4 : évaluation des preuves
-    # SynthesizerAgent(),      # Phase 3.4 — étape 5 : synthèse raisonnée
+    QuestionAnalyzerAgent(),  # Phase 3.1 — analyse de la question
+    HypothesisEngineAgent(),  # Phase 3.2 — génération d'hypothèses
+    EvidenceEngineAgent(),    # Phase 3.3 — collecte et évaluation de preuves
+    # SynthesizerAgent(),     # Phase 3.4 — synthèse raisonnée
 ]
 
 
@@ -55,22 +34,21 @@ async def run_reasoning(
     request : ReasoningRequest,
     user_id : str,
 ) -> ReasoningContext:
-    """Exécute le pipeline de raisonnement complet.
+    """Exécute le pipeline complet.
 
     Args:
         request : Requête validée par Pydantic.
-        user_id : Identifiant Supabase de l'utilisateur authentifié.
+        user_id : Identifiant Supabase de l'utilisateur.
 
     Returns:
-        ReasoningContext peuplé avec les résultats de toutes les étapes.
+        ReasoningContext peuplé par toutes les étapes.
     """
     ctx = ReasoningContext(request=request, user_id=user_id)
     ctx.initialize_trace()
 
     logger.info(
         "[REASONING] Démarrage | user=%s | question='%.60s'",
-        user_id,
-        request.question,
+        user_id, request.question,
     )
 
     pipeline_start = time.monotonic()
@@ -79,7 +57,7 @@ async def run_reasoning(
         try:
             ctx = await agent.run(ctx)
         except Exception as exc:  # noqa: BLE001
-            logger.error("[REASONING] Agent '%s' — erreur non gérée : %s", agent.name, exc)
+            logger.error("[REASONING] Agent '%s' — erreur : %s", agent.name, exc)
             ctx.mark_degraded(agent.name, str(exc))
 
     ctx.trace.total_duration_ms      = (time.monotonic() - pipeline_start) * 1000
@@ -88,27 +66,16 @@ async def run_reasoning(
     ctx.trace.evidence_quality_score = ctx.evidence_quality_score
 
     logger.info(
-        "[REASONING] Terminé | %.0fms | dégradé=%s | hypothèses=%d | preuves=%d",
-        ctx.trace.total_duration_ms,
-        ctx.pipeline_degraded,
-        len(ctx.hypotheses),
-        len(ctx.evidence),
+        "[REASONING] Terminé | %.0fms | hyp=%d | preuves=%d | qualité=%.2f | dégradé=%s",
+        ctx.trace.total_duration_ms, len(ctx.hypotheses),
+        len(ctx.evidence), ctx.evidence_quality_score, ctx.pipeline_degraded,
     )
-
     return ctx
 
 
 def context_to_response(ctx: ReasoningContext) -> ReasoningResponse:
-    """Sérialise un ReasoningContext en ReasoningResponse exposable via l'API.
-
-    Args:
-        ctx : Contexte issu de run_reasoning().
-
-    Returns:
-        ReasoningResponse prêt pour le router.
-    """
+    """Sérialise le contexte en réponse API."""
     analysis = ctx.analysis_or_fallback
-
     return ReasoningResponse(
         answer                 = ctx.final_answer or _stub_answer(ctx),
         confidence             = ctx.confidence,
@@ -131,40 +98,30 @@ def context_to_response(ctx: ReasoningContext) -> ReasoningResponse:
 # ── Helpers privés ────────────────────────────────────────────────────────────
 
 def _stub_answer(ctx: ReasoningContext) -> str:
-    """Réponse temporaire tant que le Synthesizer (Phase 3.4) n'est pas branché."""
     analysis = ctx.analysis_or_fallback
-    hyp_summary = (
-        f" {len(ctx.hypotheses)} hypothèse(s) générée(s)."
-        if ctx.hypotheses else ""
-    )
-    return (
-        f"[Synthesizer non encore implémenté — Phase 3.4] "
-        f"Type={analysis.question_type.value}, "
-        f"domaine={analysis.domain}, "
-        f"complexité={analysis.complexity_score:.2f}."
-        f"{hyp_summary}"
-    )
+    parts = [
+        f"[Synthesizer non implémenté — Phase 3.4]",
+        f"Type={analysis.question_type.value}, domaine={analysis.domain}.",
+    ]
+    if ctx.hypotheses:
+        parts.append(f"{len(ctx.hypotheses)} hypothèse(s) générée(s).")
+    if ctx.evidence:
+        best = ctx.evaluation.best_hypothesis_id if ctx.evaluation else None
+        parts.append(
+            f"{len(ctx.evidence)} preuve(s) collectée(s)."
+            + (f" Meilleure hypothèse : {best}." if best else "")
+        )
+    return " ".join(parts)
 
 
 def _compute_risk_level(confidence: float) -> str:
-    """Convertit un score de confiance en niveau de risque lisible.
-
-    Seuils alignés sur core/response_confidence.py :
-        >= 0.75 → low | >= 0.60 → medium | < 0.60 → high
-    """
-    if confidence >= 0.75:
-        return "low"
-    if confidence >= 0.60:
-        return "medium"
+    if confidence >= 0.75: return "low"
+    if confidence >= 0.60: return "medium"
     return "high"
 
 
 def _build_summary(ctx: ReasoningContext) -> str:
-    """Construit un résumé en prose du raisonnement effectué.
-
-    Le message par défaut est intentionnellement générique (sans référence
-    à un sprint ou une phase) pour rester stable d'une phase à l'autre.
-    """
+    """Résumé en prose du raisonnement — message stable sans référence de phase."""
     analysis = ctx.analysis
     parts: list[str] = []
 
@@ -172,8 +129,7 @@ def _build_summary(ctx: ReasoningContext) -> str:
         parts.append(
             f"Question de type '{analysis.question_type.value}' "
             f"dans le domaine '{analysis.domain}' "
-            f"(complexité : {analysis.complexity_score:.2f}, "
-            f"risque : {analysis.risk_level})."
+            f"(complexité : {analysis.complexity_score:.2f}, risque : {analysis.risk_level})."
         )
         if analysis.requires_memory:
             parts.append("Mémoire utilisateur consultée.")
@@ -186,6 +142,10 @@ def _build_summary(ctx: ReasoningContext) -> str:
         parts.append(f"{len(ctx.hypotheses)} hypothèse(s) générée(s).")
     if ctx.evidence:
         parts.append(f"{len(ctx.evidence)} preuve(s) collectée(s).")
+        if ctx.evaluation and ctx.evaluation.contradictions:
+            parts.append(f"{len(ctx.evaluation.contradictions)} contradiction(s) détectée(s).")
+        if ctx.evaluation and ctx.evaluation.knowledge_gaps:
+            parts.append(f"{len(ctx.evaluation.knowledge_gaps)} lacune(s) identifiée(s).")
     if ctx.pipeline_degraded:
         parts.append("⚠ Pipeline en mode dégradé.")
 
@@ -193,7 +153,6 @@ def _build_summary(ctx: ReasoningContext) -> str:
 
 
 def _best_hypothesis(ctx: ReasoningContext) -> str:
-    """Retourne le contenu de la meilleure hypothèse identifiée."""
     if not ctx.hypotheses:
         return ""
     if ctx.evaluation and ctx.evaluation.best_hypothesis_id:
