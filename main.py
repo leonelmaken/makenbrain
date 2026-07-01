@@ -1,3 +1,4 @@
+import logging
 import sys
 import time
 from contextlib import asynccontextmanager
@@ -10,9 +11,13 @@ from routers import chat_history
 from core.auth import SECURE
 from core.config import settings
 from core.memory import init_memory
+from core.middleware import RequestContextMiddleware
+from core.observability import configure_json_logging
 from core.version import APP_NAME, APP_RELEASE_NAME, APP_VERSION
 from routers import chat, memory, ingest, files, search, providers, agent, analysis, brain, video, identity, audit, users
 from routers import reasoning
+from routers import health as health_router
+from routers import agents as agents_router
 # Force l'encodage UTF-8 sur stdout/stderr, quel que soit le code page actif
 # de la console Windows (cp1252 par défaut en environnement francophone).
 # Sans ça, le moindre print() contenant un emoji (utilisés dans tout le
@@ -21,6 +26,10 @@ from routers import reasoning
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
         _stream.reconfigure(encoding="utf-8", errors="replace")
+
+# Activer les logs JSON structurés si configuré dans .env (JSON_LOGS=true)
+if settings.JSON_LOGS:
+    configure_json_logging(level=getattr(logging, settings.LOG_LEVEL.upper(), logging.INFO))
 
 try:
     from routers import graph
@@ -44,6 +53,11 @@ async def lifespan(app: FastAPI):
     step_start = time.monotonic()
     await init_memory()
     print(f"[STARTUP] Mémoire vectorielle prête ({time.monotonic() - step_start:.1f}s).")
+
+    # Phase 5 — Enregistrement des agents dans le registry
+    from core.agents.registry import register_defaults
+    register_defaults()
+    print("[STARTUP] Agents Phase 5 enregistrés.")
 
     # Démarrer le scheduler si activé
     from core.scheduler import load_config, start_scheduler
@@ -80,6 +94,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestContextMiddleware)
 
 static_dir = Path("static")
 if static_dir.exists():
@@ -106,6 +121,8 @@ app.include_router(reasoning.router, prefix="/reasoning", tags=["🧠 Raisonneme
 
 app.include_router(users.router, tags=["Users"])
 app.include_router(audit.router,    prefix="/audit",    tags=["Audit"], dependencies=SECURE)
+app.include_router(health_router.router)
+app.include_router(agents_router.router, prefix="/agents", tags=["🤖 Agents"])
 
 if GRAPH_AVAILABLE:
     app.include_router(graph.router, prefix="/graph", tags=["🕸️ Graphe de Neurones"])

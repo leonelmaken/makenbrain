@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     SUPABASE_ANON_KEY: str = ""
     SUPABASE_SERVICE_ROLE_KEY: str = ""
 
+    # ── Observabilité (Phase 4) ───────────────────
+    # JSON_LOGS=true  → logs en JSON sur stdout (recommandé en production).
+    # JSON_LOGS=false → logs en texte lisible (défaut en développement).
+    JSON_LOGS: bool = False
+    LOG_LEVEL: str = "INFO"
+
     class Config:
         env_file = ".env"
         extra = "ignore"
