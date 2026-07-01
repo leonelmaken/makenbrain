@@ -17,6 +17,7 @@ from typing import Any
 from uuid import uuid4
 
 from models.reasoning import (
+    DecisionResult,
     Evidence,
     EvidenceEvaluation,
     Hypothesis,
@@ -24,6 +25,7 @@ from models.reasoning import (
     QuestionType,
     ReasoningRequest,
     ReasoningTrace,
+    SynthesisResult,
 )
 
 
@@ -39,8 +41,10 @@ class ReasoningContext:
         hypotheses      : Résultat de HypothesisEngine — étape 2.
         evidence        : Résultat de EvidenceCollector — étape 3.
         evaluation      : Résultat de EvidenceEvaluator — étape 4.
-        final_answer    : Réponse synthétisée par le Synthesizer — étape 5.
-        confidence      : Score de confiance calculé par le Synthesizer.
+        decision          : Résultat de DecisionEngine — étape 4 (Phase 3.4).
+        final_answer      : Réponse en langage naturel produite par le Synthesizer — étape 5.
+        synthesis_result  : Métadonnées de la synthèse (stratégie, ton, flags) — Phase 3.5.
+        confidence        : Score de confiance global calculé par DecisionEngine.
         evidence_quality_score : Score qualité des preuves (0.0 → 1.0).
         trace           : Méta-données d'exécution de chaque étape.
         pipeline_degraded : True si au moins une étape a échoué partiellement.
@@ -52,14 +56,16 @@ class ReasoningContext:
     user_id : str
 
     # ── Versioning du contrat — ne jamais modifier en cours de pipeline ───────
-    context_version : str = "3.0"
+    context_version : str = "3.5"
 
     # ── Résultats des étapes (None jusqu'à exécution de l'étape) ─────────────
     analysis              : QuestionAnalysis | None = None
     hypotheses            : list[Hypothesis]        = field(default_factory=list)
     evidence              : list[Evidence]           = field(default_factory=list)
     evaluation            : EvidenceEvaluation | None = None
+    decision              : DecisionResult | None    = None
     final_answer          : str | None              = None
+    synthesis_result      : SynthesisResult | None  = None
     confidence            : float                   = 0.0
     evidence_quality_score: float                   = 0.0
 

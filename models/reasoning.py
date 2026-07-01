@@ -1,6 +1,6 @@
 """DTOs Pydantic pour le moteur de raisonnement expert de MakenBrain.
 
-Phase 3.0 / 3.1 — Expert Reasoning Engine.
+Phase 3.0 → 3.5 — Expert Reasoning Engine.
 
 Règles strictes :
 - Zéro logique métier dans ce module.
@@ -11,6 +11,13 @@ Historique :
 - Phase 3.0 : modèles initiaux (QuestionAnalysis, Hypothesis, Evidence, …)
 - Phase 3.1 : QuestionAnalysis enrichi (domain, risk_level, requires_memory,
               requires_external_search, requires_deep_reasoning, confidence).
+              Tous les nouveaux champs ont des valeurs par défaut →
+              rétrocompatibilité garantie.
+- Phase 3.2 : Hypothesis enrichi (justification, strategy_name).
+- Phase 3.3 : Evidence enrichi (credibility_score, evidence_type).
+              EvidenceEvaluation enrichi (support_scores, evidence_per_hypothesis).
+- Phase 3.4 : DecisionScore, DecisionReason, DecisionCandidate, DecisionResult.
+- Phase 3.5 : SynthesisStrategy, SynthesisTone, SynthesisResult.
               Tous les nouveaux champs ont des valeurs par défaut →
               rétrocompatibilité garantie.
 """
@@ -210,6 +217,184 @@ class ReasoningTrace(BaseModel):
     evidence_count         : int      = 0
     hypotheses_count       : int      = 0
     evidence_quality_score : float    = 0.0
+
+
+# ── Modèles Phase 3.4 — Decision Engine ──────────────────────────────────────
+
+class DecisionScore(BaseModel):
+    """Décomposition détaillée du score d'une hypothèse — Phase 3.4.
+
+    Chaque composante est calculée indépendamment par DecisionEngine puis
+    agrégée en un score global. Conserver la décomposition (plutôt qu'un
+    seul nombre) permet de justifier la décision finale composante par
+    composante dans DecisionReason.
+
+    Tous les bonus/malus sont exprimés en valeur absolue déjà appliquée
+    (pas en pourcentage), pour que la somme algébrique soit directement
+    interprétable.
+    """
+
+    evidence_score              : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Score de soutien net des preuves pour cette hypothèse
+    (repris de EvidenceEvaluation.support_scores)."""
+
+    confidence                  : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Confiance composite de l'hypothèse, dérivée de evidence_score
+    et du volume de preuves disponibles."""
+
+    contradiction_penalty       : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Pénalité appliquée si des contradictions ciblent cette hypothèse.
+    0.0 = aucune contradiction, 1.0 = contradictions maximales."""
+
+    missing_information_penalty : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Pénalité liée aux lacunes de connaissance (knowledge_gaps)
+    associées à cette hypothèse."""
+
+    memory_bonus                 : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Bonus si des preuves USER_MEMORY soutiennent cette hypothèse —
+    signal de pertinence personnelle au contexte de l'utilisateur."""
+
+    graph_bonus                  : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Bonus si des preuves NEURON_GRAPH soutiennent cette hypothèse —
+    signal de cohérence avec le graphe de connaissances existant."""
+
+    global_score                 : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Score final agrégé, utilisé pour classer les hypothèses entre elles.
+    Formule : voir DecisionEngine._compute_global_score()."""
+
+
+class DecisionReason(BaseModel):
+    """Justification textuelle structurée d'une décision — Phase 3.4.
+
+    Sépare explicitement les raisons de sélection, les raisons de rejet
+    et les facteurs de risque résiduels, pour une explicabilité complète
+    de la décision finale du moteur de raisonnement.
+    """
+
+    selection_reasons : list[str] = Field(default_factory=list)
+    """Raisons pour lesquelles l'hypothèse retenue a été choisie."""
+
+    rejection_reasons : dict[str, list[str]] = Field(default_factory=dict)
+    """Raisons de rejet par hypothesis_id pour chaque hypothèse écartée."""
+
+    missing_information : list[str] = Field(default_factory=list)
+    """Informations manquantes qui limitent la confiance de la décision."""
+
+    residual_risks : list[str] = Field(default_factory=list)
+    """Risques qui subsistent malgré la décision prise (ex. contradictions
+    non résolues, faible volume de preuves, domaine à haut risque)."""
+
+
+class DecisionCandidate(BaseModel):
+    """Une hypothèse évaluée dans le cadre de la décision finale — Phase 3.4.
+
+    Associe une hypothèse à son score détaillé, permettant à
+    DecisionResult de présenter un classement complet et traçable
+    de toutes les hypothèses considérées (pas seulement la gagnante).
+    """
+
+    hypothesis_id : str
+    """Identifiant de l'hypothèse évaluée (référence vers Hypothesis)."""
+
+    content       : str
+    """Contenu textuel de l'hypothèse, dupliqué ici pour lisibilité
+    sans nécessiter une jointure avec la liste d'hypothèses d'origine."""
+
+    score         : DecisionScore
+    """Décomposition complète du score de ce candidat."""
+
+    selected      : bool = False
+    """True si ce candidat est l'hypothèse retenue par la décision finale."""
+
+
+class DecisionResult(BaseModel):
+    """Résultat complet de l'étape 4 — DecisionEngine (Phase 3.4).
+
+    Document central de la prise de décision : qui a gagné, pourquoi,
+    qui a perdu et pourquoi, avec quel niveau de confiance et quels
+    risques résiduels. Consommé par le futur Synthesizer (Phase 3.5)
+    pour rédiger la réponse finale à l'utilisateur.
+    """
+
+    candidates          : list[DecisionCandidate] = Field(default_factory=list)
+    """Tous les candidats évalués, classés par score décroissant."""
+
+    selected_hypothesis_id : str | None = None
+    """Identifiant de l'hypothèse retenue (None si aucun candidat valide)."""
+
+    reason               : DecisionReason = Field(default_factory=DecisionReason)
+    """Justification structurée de la décision."""
+
+    overall_confidence   : float = Field(default=0.0, ge=0.0, le=1.0)
+    """Confiance globale dans la décision finale, intégrant l'analyse,
+    les hypothèses, les preuves, les contradictions et le score de
+    l'hypothèse retenue."""
+
+    decision_quality      : str = "low"
+    """Niveau qualitatif de la décision : low | medium | high.
+    Dérivé de overall_confidence selon les mêmes seuils que risk_level."""
+
+
+# ── Modèles Phase 3.5 — Synthesizer ─────────────────────────────────────────
+
+class SynthesisStrategy(str, Enum):
+    """Stratégie utilisée par le Synthesizer pour produire la réponse finale.
+
+    LLM      : réponse générée par un modèle de langage à partir d'un prompt
+                structuré. Qualité optimale mais dépend de la disponibilité LLM.
+    TEMPLATE : réponse construite par des règles déterministes sans LLM.
+                Utilisé en fallback si le LLM est indisponible ou échoue.
+    """
+
+    LLM      = "llm"
+    TEMPLATE = "template"
+
+
+class SynthesisTone(str, Enum):
+    """Registre de prudence de la réponse synthétisée.
+
+    Calculé à partir du score de confiance global du pipeline :
+        AFFIRMATIVE : confiance >= 0.75 — réponse directe et affirmative.
+        BALANCED    : 0.60 <= confiance < 0.75 — nuances exprimées.
+        CAUTIOUS    : confiance < 0.60 — limites explicites, vérification recommandée.
+    """
+
+    AFFIRMATIVE = "affirmative"
+    BALANCED    = "balanced"
+    CAUTIOUS    = "cautious"
+
+
+class SynthesisResult(BaseModel):
+    """Métadonnées de la synthèse produite par le Synthesizer — Phase 3.5.
+
+    Complète ctx.final_answer avec des informations sur la manière dont
+    la réponse a été générée. Utile pour l'observabilité, le debugging
+    et le futur Super Admin Advisor.
+
+    Tous les champs ont des valeurs par défaut → rétrocompatibilité garantie.
+    """
+
+    strategy                : SynthesisStrategy = SynthesisStrategy.TEMPLATE
+    """Stratégie ayée pour générer la réponse."""
+
+    tone                    : SynthesisTone     = SynthesisTone.CAUTIOUS
+    """Registre de prudence appliqué à la réponse."""
+
+    sources_cited           : int               = 0
+    """Nombre de sources explicitement citées dans la réponse finale."""
+
+    has_uncertainty_statement : bool            = False
+    """True si la réponse contient une déclaration explicite d'incertitude."""
+
+    has_gap_statement       : bool              = False
+    """True si la réponse mentionne des lacunes de connaissance."""
+
+    has_risk_warning        : bool              = False
+    """True si la réponse inclut un avertissement de risque ou invite
+    à une vérification humaine."""
+
+    llm_prompt_tokens       : int               = 0
+    """Estimation du nombre de tokens du prompt envoyé au LLM (0 si TEMPLATE)."""
 
 
 # ── Modèles de requête / réponse API ─────────────────────────────────────────
