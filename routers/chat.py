@@ -4,6 +4,7 @@ Auto-détection de domaine et auto-alimentation en arrière-plan.
 """
 import json
 import logging
+import random
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
@@ -15,12 +16,98 @@ from core.memory import search_memory
 from core.providers import groq_generate, detect_provider
 from core.config import settings
 from core.chat_history import add_message, generate_smart_topic
-from core.auth import require_supabase_user
+from core.auth import require_chat_user
 from core.consciousness import consciousness
 from models.user import User
 
 router = APIRouter()
 logger = logging.getLogger("makenbrain.chat")
+
+
+# ── Fast Conversation Layer ────────────────────────────────────────────────────
+# Détecte les messages conversationnels simples et retourne une réponse
+# immédiate, sans appeler le LLM ni le pipeline de raisonnement.
+
+_FAST_REPLIES: dict[str, list[str]] = {
+    "greetings": [
+        "Salut ! 😊\nSur quoi on travaille aujourd'hui ?",
+        "Hey ! Qu'est-ce qu'on fait aujourd'hui ?",
+        "Salut ! Content de te revoir.\nOn se lance ?",
+        "Bonjour ! Tu veux qu'on attaque quoi ?",
+        "Hey, re ! On reprend où on en était ?",
+    ],
+    "thanks": [
+        "Avec plaisir !",
+        "De rien, c'est pour ça que je suis là.",
+        "Pas de problème !",
+        "Toujours.",
+        "C'est normal.",
+    ],
+    "ok": [
+        "Parfait.",
+        "Ok, nickel.",
+        "Reçu.",
+        "C'est noté.",
+        "On y va.",
+    ],
+    "howru": [
+        "Bien ! Et toi, quoi de neuf ?",
+        "En forme. Tu travailles sur quoi en ce moment ?",
+        "Top ! On attaque quoi ?",
+        "Bien. Et toi ?",
+    ],
+    "bye": [
+        "À bientôt !",
+        "Bonne continuation !",
+        "À plus !",
+        "Bonne journée !",
+        "Prends soin de toi.",
+    ],
+    "goodnight": [
+        "Bonne nuit !",
+        "Dors bien.",
+        "Bonne nuit, on reprend demain.",
+    ],
+    "yes": [
+        "Ok !",
+        "Parfait.",
+        "Noté.",
+        "Go.",
+    ],
+    "no": [
+        "Ok, pas de problème.",
+        "Compris.",
+        "Noté.",
+        "Pas de souci.",
+    ],
+}
+
+_FAST_PATTERNS: list[tuple[frozenset[str], str]] = [
+    (frozenset(["salut", "hello", "bonjour", "bonsoir", "hey", "coucou", "hi", "allo", "yo"]), "greetings"),
+    (frozenset(["merci", "thanks", "thank you", "thx", "merci beaucoup"]), "thanks"),
+    (frozenset(["ok", "okay", "d'accord", "vu", "compris", "reçu", "parfait", "super", "cool", "nickel"]), "ok"),
+    (frozenset(["ça va", "ca va", "comment tu vas", "comment ça va", "tu vas bien", "ça roule"]), "howru"),
+    (frozenset(["bonne nuit", "bonne nuit !", "dors bien"]), "goodnight"),
+    (frozenset(["au revoir", "bye", "à bientôt", "bonne soirée", "à plus", "ciao", "tchao"]), "bye"),
+    (frozenset(["oui", "yes", "ouais", "yep", "yup", "mouais"]), "yes"),
+    (frozenset(["non", "no", "nope", "nan", "pas vraiment"]), "no"),
+]
+
+
+def _fast_reply(message: str) -> str | None:
+    """Retourne une réponse immédiate si le message est une conversation simple.
+
+    Critères : message court (≤ 4 mots) ET correspondance exacte avec un
+    pattern connu. Retourne None si le pipeline complet est nécessaire.
+    """
+    stripped = message.strip()
+    if len(stripped.split()) > 4:
+        return None
+    normalized = stripped.lower().rstrip("!?. ")
+    for patterns, category in _FAST_PATTERNS:
+        if normalized in patterns:
+            return random.choice(_FAST_REPLIES[category])
+    return None
 
 
 class ChatRequest(BaseModel):
@@ -103,11 +190,29 @@ from core.project_memory import project_manager
 async def chat(
     request: ChatRequest,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_supabase_user),
+    current_user: User = Depends(require_chat_user),
 ):
     """
     Chat intelligent avec mémoire persistante, contexte utilisateur et projets.
     """
+    # ── Fast Conversation Layer ──────────────────────────────────────────────
+    fast = _fast_reply(request.message)
+    if fast is not None:
+        if request.session_id:
+            add_message(request.session_id, "user", request.message, str(current_user.id))
+            add_message(request.session_id, "assistant", fast, str(current_user.id))
+        return ChatResponse(
+            response=fast,
+            confidence=1.0,
+            risk_level="low",
+            suggested_sources=[],
+            memories_used=0,
+            graph_concepts=[],
+            model="fast-reply",
+            provider="local",
+            session_id=request.session_id,
+        )
+
     context_parts, memories_used, graph_concepts, context_preview = [], 0, [], []
 
     # 1. INJECTION DU PROFIL UTILISATEUR & PROJETS (Phase 1)

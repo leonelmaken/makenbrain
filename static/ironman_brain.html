@@ -35,8 +35,16 @@ button:focus-visible, .chip:focus-visible, input:focus-visible { outline:1.5px s
 #brand-mark {
   position:fixed; top:26px; left:28px; z-index:40;
   font-size:11px; letter-spacing:3px; color:var(--text-dim); text-transform:uppercase; pointer-events:none;
+  display:flex; align-items:center; gap:10px;
 }
 #brand-mark span { color: var(--accent); }
+#health-indicator {
+  width:6px; height:6px; border-radius:50%; background:#34d399;
+  box-shadow:0 0 8px #34d399; transition:background .5s, box-shadow .5s;
+  pointer-events:auto; cursor:pointer; flex-shrink:0;
+}
+#health-indicator.degraded { background:#ffa53c; box-shadow:0 0 8px #ffa53c; }
+#health-indicator.offline  { background:#ff5c5c; box-shadow:0 0 8px #ff5c5c; }
 
 #status-hud {
   position:fixed; top:28px; right:28px; z-index:40;
@@ -51,6 +59,53 @@ button:focus-visible, .chip:focus-visible, input:focus-visible { outline:1.5px s
 }
 @keyframes dotbreathe { 0%,100%{opacity:.55; transform:scale(1);} 50%{opacity:1; transform:scale(1.3);} }
 #status-label { color:var(--state); transition:color .5s ease; }
+
+/* ── ADMIN BADGE ── */
+#admin-badge {
+  position:fixed; top:28px; left:50%; transform:translateX(-50%); z-index:40;
+  display:none; align-items:center; gap:6px;
+  padding:4px 12px; background:rgba(255,200,50,.08); border:0.5px solid rgba(255,200,50,.3);
+  border-radius:999px; font-size:9.5px; letter-spacing:2px; color:#ffc832; text-transform:uppercase;
+}
+#admin-badge.visible { display:flex; }
+#admin-badge-dot { width:5px; height:5px; border-radius:50%; background:#ffc832; box-shadow:0 0 6px #ffc832; }
+
+/* ── ADMIN MODAL ── */
+#admin-modal {
+  position:fixed; inset:0; z-index:200000; background:rgba(2,3,10,.88);
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(28px);
+}
+#admin-modal.open { display:flex; }
+#admin-box {
+  width:min(380px,88vw); background:var(--bg-elevated); border:0.5px solid rgba(255,200,50,.25);
+  border-radius:20px; padding:28px; box-shadow:0 30px 80px rgba(0,0,0,.7), 0 0 40px rgba(255,200,50,.06);
+}
+.admin-title {
+  font-size:10px; letter-spacing:3px; color:#ffc832; text-transform:uppercase; margin-bottom:20px;
+  display:flex; align-items:center; gap:8px;
+}
+.admin-title::before { content:''; width:5px; height:5px; border-radius:50%; background:#ffc832; box-shadow:0 0 8px #ffc832; }
+.admin-desc { font-size:12px; color:var(--text-dim); margin-bottom:18px; line-height:1.6; }
+#admin-key-input {
+  width:100%; padding:11px 14px; background:rgba(255,255,255,.04); border:0.5px solid var(--border);
+  border-radius:10px; color:var(--text-bright); font-family:'JetBrains Mono', monospace; font-size:13px;
+  outline:none; transition:.2s;
+}
+#admin-key-input:focus { border-color:rgba(255,200,50,.4); background:rgba(255,200,50,.03); }
+#admin-key-input::placeholder { color:var(--text-dim); }
+.admin-actions { display:flex; gap:8px; margin-top:14px; }
+.admin-btn {
+  flex:1; padding:10px; border:none; border-radius:10px; font-size:12px; letter-spacing:.5px;
+  cursor:pointer; font-family:inherit; transition:.2s;
+}
+#admin-cancel { background:rgba(255,255,255,.04); color:var(--text-dim); }
+#admin-cancel:hover { color:var(--text-bright); background:rgba(255,255,255,.08); }
+#admin-confirm { background:rgba(255,200,50,.12); color:#ffc832; border:0.5px solid rgba(255,200,50,.3); }
+#admin-confirm:hover { background:rgba(255,200,50,.2); }
+#admin-logout { background:rgba(255,92,92,.1); color:#ff5c5c; border:0.5px solid rgba(255,92,92,.25); display:none; }
+#admin-logout:hover { background:rgba(255,92,92,.18); }
+#admin-logout.visible { display:block; flex:0 0 auto; padding:10px 14px; }
 
 /* ── VOICE OVERLAY ── */
 #voice-overlay {
@@ -108,6 +163,11 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 .msg-tag-dot { width:5px; height:5px; border-radius:50%; background:var(--state); transition:background .4s ease; }
 .msg-body { white-space:pre-wrap; }
 
+/* Agent mode tag */
+.ai-msg.agent-msg { border-color:rgba(255,200,50,.18); background:rgba(14,16,28,.85); }
+.ai-msg.agent-msg .msg-tag { color:#ffc832; }
+.ai-msg.agent-msg .msg-tag-dot { background:#ffc832; }
+
 #thinking { display:flex; align-items:center; gap:12px; padding:14px 6px; align-self:flex-start; }
 #thinking .dots { display:flex; gap:6px; }
 #thinking .dot { width:7px; height:7px; border-radius:50%; background:var(--state); animation:pulse 1.4s infinite ease-in-out; }
@@ -149,10 +209,12 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
   transition:box-shadow .5s ease, border-color .5s ease;
 }
 #dock:focus-within { border-color:rgba(var(--state-rgb),.45); box-shadow:0 22px 60px rgba(0,0,0,.65), 0 0 0 1px rgba(var(--state-rgb),.25), 0 0 36px -6px rgba(var(--state-rgb),.45); }
+#dock.agent-mode { border-color:rgba(255,200,50,.35); box-shadow:0 22px 60px rgba(0,0,0,.65), 0 0 0 1px rgba(255,200,50,.2), 0 0 30px -6px rgba(255,200,50,.25); }
 
 .dock-btn { width:38px; height:38px; border-radius:50%; border:none; background:none; color:var(--text-dim); display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:.2s; }
 .dock-btn:hover { color:var(--text-bright); background:rgba(255,255,255,.06); }
 .dock-btn.active { color:var(--accent); background:rgba(45,226,201,.12); }
+.dock-btn.agent-active { color:#ffc832; background:rgba(255,200,50,.12); }
 
 #input { flex:1; min-width:0; background:none; border:none; outline:none; color:var(--text-bright); font-size:15.5px; font-family:inherit; padding:10px 6px; }
 #input::placeholder { color:var(--text-dim); }
@@ -219,6 +281,48 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 .hist-del:hover { color:var(--danger); }
 .hist-empty { opacity:.35; font-size:11px; padding:8px 0; }
 
+/* ── ADMIN PANEL (in sheet) ── */
+#admin-panel {
+  display:none; margin-top:22px; padding:16px; border:0.5px solid rgba(255,200,50,.2);
+  border-radius:14px; background:rgba(255,200,50,.03);
+}
+#admin-panel.visible { display:block; }
+.admin-panel-title {
+  font-size:10px; letter-spacing:2px; color:#ffc832; text-transform:uppercase; margin-bottom:14px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+#health-status-row { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+.health-pill {
+  display:flex; align-items:center; gap:5px; padding:5px 10px;
+  border-radius:999px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase;
+  border:0.5px solid;
+}
+.health-pill.ok    { color:#34d399; border-color:rgba(52,211,153,.3); background:rgba(52,211,153,.06); }
+.health-pill.warn  { color:#ffa53c; border-color:rgba(255,165,60,.3);  background:rgba(255,165,60,.06); }
+.health-pill.err   { color:#ff5c5c; border-color:rgba(255,92,92,.3);   background:rgba(255,92,92,.06); }
+.health-pill::before { content:''; width:4px; height:4px; border-radius:50%; background:currentColor; }
+
+#agents-grid { display:flex; flex-direction:column; gap:6px; }
+.agent-row {
+  display:flex; align-items:center; justify-content:space-between; padding:8px 10px;
+  background:rgba(255,255,255,.02); border:0.5px solid var(--border-soft); border-radius:9px;
+  font-size:11.5px; transition:.15s;
+}
+.agent-row:hover { background:rgba(255,255,255,.04); }
+.agent-name { color:var(--text-bright); font-family:'JetBrains Mono',monospace; }
+.agent-autonomy { font-size:9px; letter-spacing:1px; text-transform:uppercase; padding:3px 7px; border-radius:999px; }
+.autonomy-suggest   { color:var(--accent); background:rgba(45,226,201,.08); border:0.5px solid rgba(45,226,201,.2); }
+.autonomy-sandboxed { color:#ffa53c; background:rgba(255,165,60,.08); border:0.5px solid rgba(255,165,60,.2); }
+.autonomy-readonly  { color:var(--text-dim); background:rgba(255,255,255,.04); border:0.5px solid var(--border-soft); }
+.autonomy-stub      { color:#ff5c5c; background:rgba(255,92,92,.06); border:0.5px solid rgba(255,92,92,.2); }
+
+#admin-logout-sheet {
+  width:100%; margin-top:12px; padding:10px; border:none; border-radius:9px;
+  background:rgba(255,92,92,.08); border:0.5px solid rgba(255,92,92,.2);
+  color:#ff5c5c; font-size:11px; letter-spacing:1px; cursor:pointer; transition:.2s;
+}
+#admin-logout-sheet:hover { background:rgba(255,92,92,.14); }
+
 @media (max-width:640px) {
   h1 { font-size:28px; letter-spacing:2px; }
   .chips { gap:8px; }
@@ -234,10 +338,29 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 
 <canvas id="c"></canvas>
 
-<div id="brand-mark">MAKEN<span>BRAIN</span></div>
+<div id="brand-mark">
+  <div id="health-indicator" title="Statut backend"></div>
+  MAKEN<span>BRAIN</span>
+</div>
 <div id="status-hud">
   <div id="status-dot"></div>
   <span id="status-label">VEILLE</span>
+</div>
+
+<div id="admin-badge"><div id="admin-badge-dot"></div>SUPER ADMIN</div>
+
+<!-- Admin modal -->
+<div id="admin-modal">
+  <div id="admin-box">
+    <div class="admin-title mono">SUPER ADMIN — ACCÈS DÉVELOPPEUR</div>
+    <p class="admin-desc">Entrez votre <code style="color:var(--accent)">ADMIN_API_KEY</code> pour activer le mode développeur. Raccourci : <code style="color:var(--accent)">Ctrl+Shift+A</code></p>
+    <input id="admin-key-input" type="password" placeholder="sk-admin-…" autocomplete="off">
+    <div class="admin-actions">
+      <button class="admin-btn" id="admin-cancel">Annuler</button>
+      <button class="admin-btn" id="admin-logout" onclick="logoutAdmin()">Déconnecter</button>
+      <button class="admin-btn" id="admin-confirm">Activer</button>
+    </div>
+  </div>
 </div>
 
 <div id="voice-overlay">
@@ -268,6 +391,18 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 
     <div class="sidebar-label mono" style="margin-top:22px; opacity:.6">Historique</div>
     <div id="history-list"></div>
+
+    <!-- Admin panel — visible en mode SuperAdmin -->
+    <div id="admin-panel">
+      <div class="admin-panel-title mono">
+        <span>Tableau de bord admin</span>
+        <span id="admin-version" style="color:var(--text-dim);font-size:9px"></span>
+      </div>
+      <div id="health-status-row"></div>
+      <div class="sidebar-label mono" style="margin-bottom:10px">Agents enregistrés</div>
+      <div id="agents-grid"></div>
+      <button id="admin-logout-sheet" class="mono" onclick="logoutAdmin()">Déconnecter Super Admin</button>
+    </div>
   </div>
 </div>
 
@@ -281,17 +416,17 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg>
         Projet ITAG
       </div>
-      <div class="chip mono" data-prompt="Analyse l'architecture de mon projet MakenBrain.">
+      <div class="chip mono" data-prompt="Analyse l'architecture de mon projet MakenBrain." data-agent="true">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7.5 7.2L11 16.4M16.5 7.2L13 16.4M8 6h8"/></svg>
         Analyse système
       </div>
-      <div class="chip mono" data-prompt="Génère une image ultra-réaliste futuriste.">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-4 4-3-3-6 6"/></svg>
-        Générer une image
+      <div class="chip mono" data-prompt="Décompose en sous-tâches : construire un plan d'apprentissage du machine learning." data-agent="true">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/><path d="M9 12h6M9 16h4"/></svg>
+        Planification
       </div>
-      <div class="chip mono" data-prompt="Crée une courte vidéo d'une nébuleuse.">
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="M17 9l4-2v10l-4-2"/></svg>
-        Générer une vidéo
+      <div class="chip mono" data-prompt="Raisonnement profond : quelles sont les forces et faiblesses de mon approche actuelle ?">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        Raisonnement
       </div>
     </div>
   </div>
@@ -333,6 +468,11 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 
     <input type="text" id="input" placeholder="Envoyer un message au Cortex…" autocomplete="off">
 
+    <!-- Agent mode toggle -->
+    <button class="dock-btn" id="agent-btn" title="Mode Agent (raisonnement expert via pipeline IA)" aria-label="Basculer mode agent">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+
     <button class="dock-btn" id="mic-btn" aria-label="Dicter">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/><path d="M8 22h8"/></svg>
     </button>
@@ -353,7 +493,133 @@ let isThinking = false;
 let isRecording = false;
 let abortController = null;
 let actingTimer = null;
+let agentMode = false;
 
+/* ── SUPER ADMIN ── */
+let adminApiKey = sessionStorage.getItem('mb_admin_key') || '';
+
+function getHeaders(extra = {}) {
+  const h = { 'Content-Type': 'application/json', ...extra };
+  if (adminApiKey) h['X-API-Key'] = adminApiKey;
+  return h;
+}
+
+function applyAdminUI() {
+  const active = !!adminApiKey;
+  document.getElementById('admin-badge').classList.toggle('visible', active);
+  document.getElementById('admin-logout').classList.toggle('visible', active);
+  document.getElementById('admin-panel').classList.toggle('visible', active);
+  if (active) loadAdminPanel();
+}
+
+function loginAdmin(key) {
+  adminApiKey = key;
+  sessionStorage.setItem('mb_admin_key', key);
+  applyAdminUI();
+}
+
+function logoutAdmin() {
+  adminApiKey = '';
+  sessionStorage.removeItem('mb_admin_key');
+  applyAdminUI();
+  closeAdminModal();
+}
+
+function openAdminModal() {
+  const modal = document.getElementById('admin-modal');
+  const input = document.getElementById('admin-key-input');
+  input.value = adminApiKey;
+  modal.classList.add('open');
+  setTimeout(() => input.focus(), 100);
+}
+function closeAdminModal() { document.getElementById('admin-modal').classList.remove('open'); }
+
+document.getElementById('admin-cancel').onclick = closeAdminModal;
+document.getElementById('admin-confirm').onclick = () => {
+  const key = document.getElementById('admin-key-input').value.trim();
+  if (key) loginAdmin(key);
+  closeAdminModal();
+};
+document.getElementById('admin-key-input').onkeydown = (e) => {
+  if (e.key === 'Enter') document.getElementById('admin-confirm').click();
+  if (e.key === 'Escape') closeAdminModal();
+};
+document.getElementById('admin-modal').onclick = (e) => { if (e.target === e.currentTarget) closeAdminModal(); };
+
+document.addEventListener('keydown', (e) => {
+  if (e.ctrlKey && e.shiftKey && e.key === 'A') { e.preventDefault(); openAdminModal(); }
+});
+
+async function loadAdminPanel() {
+  try {
+    const [health, agents] = await Promise.all([
+      fetch(`${API}/health/full`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/agents/registry`).then(r => r.json()).catch(() => null),
+    ]);
+
+    const statusRow = document.getElementById('health-status-row');
+    if (health) {
+      const cls = health.status === 'ok' ? 'ok' : health.status === 'degraded' ? 'warn' : 'err';
+      const label = health.status === 'ok' ? 'Système nominal' : health.status === 'degraded' ? 'Dégradé' : 'Critique';
+      const providers = (health.providers || []).map(p =>
+        `<span class="health-pill ${p.available ? 'ok' : 'err'}">${p.name}</span>`
+      ).join('');
+      statusRow.innerHTML = `<span class="health-pill ${cls}">${label}</span>${providers}`;
+      document.getElementById('admin-version').textContent = `v${health.version || '?'}`;
+    }
+
+    const grid = document.getElementById('agents-grid');
+    if (agents && agents.agents) {
+      grid.innerHTML = agents.agents.map(a => {
+        const au = a.autonomy || '';
+        const auClass = au === 'suggest' ? 'autonomy-suggest' : au === 'sandboxed_execute' ? 'autonomy-sandboxed' :
+                        a.version?.includes('stub') ? 'autonomy-stub' : 'autonomy-readonly';
+        return `<div class="agent-row">
+          <span class="agent-name">${a.name}</span>
+          <span class="agent-autonomy ${auClass}">${au || 'stub'}</span>
+        </div>`;
+      }).join('');
+    }
+  } catch (e) {}
+}
+
+/* ── HEALTH POLLING ── */
+async function pollHealth() {
+  const dot = document.getElementById('health-indicator');
+  try {
+    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(4000) });
+    const d = await r.json();
+    if (d.status === 'ok') {
+      dot.className = '';
+      dot.title = `Backend OK — ${d.version || ''} — uptime ${Math.round((d.uptime_seconds || 0) / 60)}min`;
+    } else {
+      dot.className = 'degraded';
+      dot.title = 'Backend dégradé';
+    }
+  } catch {
+    dot.className = 'offline';
+    dot.title = 'Backend hors ligne';
+  }
+}
+pollHealth();
+setInterval(pollHealth, 30000);
+
+/* ── AGENT MODE TOGGLE ── */
+const agentBtn = document.getElementById('agent-btn');
+const dock = document.getElementById('dock');
+
+function setAgentMode(on) {
+  agentMode = on;
+  agentBtn.classList.toggle('agent-active', on);
+  dock.classList.toggle('agent-mode', on);
+  document.getElementById('input').placeholder = on
+    ? 'Raisonnement expert via pipeline IA…'
+    : 'Envoyer un message au Cortex…';
+}
+
+agentBtn.onclick = () => setAgentMode(!agentMode);
+
+/* ── INIT ── */
 const input = document.getElementById('input');
 const chat = document.getElementById('chat-container');
 const welcome = document.getElementById('welcome');
@@ -366,6 +632,7 @@ const progressFill = document.getElementById('progress-fill');
 
 sendBtn.innerHTML = SEND_ICON;
 if (voiceAlwaysOn) voiceBtn.classList.add('active');
+applyAdminUI();
 
 (function () {
   const hr = new Date().getHours();
@@ -395,6 +662,27 @@ const glowMat = new THREE.MeshBasicMaterial({ color: STATES.idle.hex, transparen
 const glow = new THREE.Mesh(new THREE.IcosahedronGeometry(1.3, 2), glowMat);
 scene.add(glow);
 
+/* Inner orbit rings — Phase 4 enhancement */
+const RING_DEFS = [
+  { radius: 0.82, tilt: 0.42,  speed:  0.014, phase: 0    },
+  { radius: 1.05, tilt: -0.65, speed: -0.010, phase: 1.1  },
+  { radius: 0.68, tilt:  1.05, speed:  0.008, phase: 2.3  },
+];
+const orbitRings = RING_DEFS.map(d => {
+  const geo = new THREE.TorusGeometry(d.radius, 0.007, 8, 90);
+  const mat = new THREE.MeshBasicMaterial({ color: STATES.idle.hex, transparent: true, opacity: 0.32 });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = d.tilt;
+  mesh.rotation.z = d.phase;
+  scene.add(mesh);
+  return { mesh, mat, ...d };
+});
+
+/* Inner core sphere — subtle solid center */
+const innerCoreMat = new THREE.MeshBasicMaterial({ color: STATES.idle.hex, transparent: true, opacity: 0.035 });
+const innerCore = new THREE.Mesh(new THREE.IcosahedronGeometry(0.52, 3), innerCoreMat);
+scene.add(innerCore);
+
 const COUNT = 650;
 const positions = new Float32Array(COUNT * 3);
 for (let i = 0; i < COUNT; i++) {
@@ -411,7 +699,6 @@ const particleMat = new THREE.PointsMaterial({ color: STATES.idle.hex, size: 0.0
 const particles = new THREE.Points(pGeo, particleMat);
 scene.add(particles);
 
-// Synapses: sparse nearest-neighbour links so the particle shell reads as a living neuron graph
 const linePositions = [];
 const maxDistSq = 0.85 * 0.85;
 for (let i = 0; i < 220; i++) {
@@ -437,7 +724,10 @@ scene.add(synapses);
 scene.add(new THREE.AmbientLight(0x0a0a10));
 const light = new THREE.PointLight(STATES.idle.hex, 2, 16);
 light.position.set(5, 5, 5);
+const innerLight = new THREE.PointLight(STATES.idle.hex, 1.2, 6);
+innerLight.position.set(-2, -2, 2);
 scene.add(light);
+scene.add(innerLight);
 
 function setBrainState(name) {
   if (!STATES[name]) return;
@@ -451,10 +741,15 @@ function setBrainState(name) {
   particleMat.color.set(s.hex);
   lineMat.color.set(s.hex);
   light.color.set(s.hex);
+  innerLight.color.set(s.hex);
+  innerCoreMat.color.set(s.hex);
+  orbitRings.forEach(r => r.mat.color.set(s.hex));
+  /* Increase ring opacity when active */
+  const ringOp = name === 'idle' ? 0.32 : name === 'analyzing' ? 0.65 : 0.5;
+  orbitRings.forEach(r => { r.mat.opacity = ringOp; });
 }
 setBrainState('idle');
 
-// Pulse rings: every message sent/received fires a synapse-style shockwave through the core
 const pulses = [];
 function spawnPulse(colorHex) {
   const geo = new THREE.RingGeometry(0.08, 0.16, 64);
@@ -462,6 +757,13 @@ function spawnPulse(colorHex) {
   const ring = new THREE.Mesh(geo, mat);
   scene.add(ring);
   pulses.push({ mesh: ring, mat, born: performance.now() });
+}
+
+/* Extra pulse on state enter analyzing — burst of 3 rings */
+function spawnBurst(colorHex, count = 3) {
+  for (let i = 0; i < count; i++) {
+    setTimeout(() => spawnPulse(colorHex), i * 120);
+  }
 }
 
 let mouseX = 0, mouseY = 0;
@@ -472,8 +774,15 @@ function animate() {
   const speed = currentState === 'analyzing' ? 0.018 : currentState === 'acting' ? 0.01 : 0.0025;
   core.rotation.y += speed; core.rotation.x += speed * 0.3;
   glow.rotation.y -= speed * 0.4;
+  innerCore.rotation.y += speed * 1.8; innerCore.rotation.z -= speed * 0.9;
   particles.rotation.y -= speed * 0.55;
   synapses.rotation.y -= speed * 0.55;
+
+  /* Orbit rings — independent axes */
+  orbitRings.forEach((r, i) => {
+    r.mesh.rotation.y += r.speed;
+    r.mesh.rotation.z += r.speed * 0.35 * (i % 2 === 0 ? 1 : -1);
+  });
 
   camera.position.x += (mouseX * 0.6 - camera.position.x) * 0.04;
   camera.position.y += (-mouseY * 0.6 - camera.position.y) * 0.04;
@@ -501,14 +810,14 @@ addEventListener('resize', () => {
 /* ── CHAT ── */
 function startChatUI() { welcome.classList.add('hide'); chat.classList.add('active'); }
 
-function addMsg(txt, isAi) {
+function addMsg(txt, isAi, isAgent = false) {
   startChatUI();
   const div = document.createElement('div');
-  div.className = `msg ${isAi ? 'ai-msg' : 'user-msg'}`;
+  div.className = `msg ${isAi ? 'ai-msg' + (isAgent ? ' agent-msg' : '') : 'user-msg'}`;
   if (isAi) {
     const tag = document.createElement('div');
     tag.className = 'msg-tag mono';
-    tag.innerHTML = '<span class="msg-tag-dot"></span>CORTEX';
+    tag.innerHTML = `<span class="msg-tag-dot"></span>${isAgent ? 'AGENT · RAISONNEMENT' : 'CORTEX'}`;
     div.appendChild(tag);
   }
   const body = document.createElement('div');
@@ -520,10 +829,10 @@ function addMsg(txt, isAi) {
 }
 
 let thinkingEl = null;
-function showThinking() {
+function showThinking(label = 'ANALYSE NEURONALE') {
   thinkingEl = document.createElement('div');
   thinkingEl.id = 'thinking';
-  thinkingEl.innerHTML = '<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span id="thinking-text" class="mono">ANALYSE NEURONALE</span>';
+  thinkingEl.innerHTML = `<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span id="thinking-text" class="mono">${label}</span>`;
   chat.appendChild(thinkingEl);
   chat.scrollTop = chat.scrollHeight;
 }
@@ -546,31 +855,51 @@ async function send(requestedByVoice = false) {
   input.value = '';
 
   isThinking = true;
-  showThinking();
+  const useAgent = agentMode;
+  showThinking(useAgent ? 'RAISONNEMENT EXPERT' : 'ANALYSE NEURONALE');
   sendBtn.innerHTML = STOP_ICON;
   sendBtn.classList.add('stop');
   setBrainState('analyzing');
-  spawnPulse(STATES.analyzing.hex);
+  spawnBurst(STATES.analyzing.hex, useAgent ? 3 : 1);
 
   abortController = new AbortController();
 
   try {
-    const res = await fetch(`${API}/chat/`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: val, session_id: currentSession, use_memory: true }),
-      signal: abortController.signal
-    });
-    const data = await res.json();
-    stopThinking();
-    if (data.session_id) {
-      currentSession = data.session_id;
-      localStorage.setItem('mb_session', currentSession);
-      loadHistory();
+    let responseText;
+
+    if (useAgent) {
+      /* ── Agent mode → /agents/execute ── */
+      const res = await fetch(`${API}/agents/execute`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ input: val, type: 'reasoning', session_id: currentSession }),
+        signal: abortController.signal,
+      });
+      const data = await res.json();
+      responseText = data.final_output || data.detail?.final_output || 'Aucune réponse des agents.';
+      stopThinking();
+      addMsg(responseText, true, true);
+    } else {
+      /* ── Chat mode → /chat/ ── */
+      const res = await fetch(`${API}/chat/`, {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ message: val, session_id: currentSession, use_memory: true }),
+        signal: abortController.signal,
+      });
+      const data = await res.json();
+      if (data.session_id) {
+        currentSession = data.session_id;
+        localStorage.setItem('mb_session', currentSession);
+        loadHistory();
+      }
+      responseText = data.response;
+      stopThinking();
+      addMsg(responseText, true, false);
     }
-    addMsg(data.response, true);
+
     flashActing();
-    if (requestedByVoice || voiceAlwaysOn) speak(data.response);
+    if (voiceAlwaysOn) speak(responseText);
   } catch (e) {
     if (e.name !== 'AbortError') addMsg('Liaison interrompue.', true);
     stopThinking();
@@ -587,11 +916,83 @@ function stopThinking() {
   if (!isRecording) setBrainState('idle');
 }
 
+function preprocessTTS(txt) {
+  let s = txt;
+  // Supprimer blocs code et markdown
+  s = s.replace(/```[\s\S]*?```/g, 'bloc de code omis.');
+  s = s.replace(/`([^`]+)`/g, '$1');
+  s = s.replace(/\*\*(.*?)\*\*/g, '$1').replace(/\*(.*?)\*/g, '$1');
+  s = s.replace(/^#{1,6}\s+/gm, '');
+  s = s.replace(/^\s*[-*•]\s+/gm, '');          // listes
+  s = s.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1'); // liens markdown
+  // Supprimer URLs brutes
+  s = s.replace(/https?:\/\/\S+/g, '');
+  // Acronymes et abréviations
+  s = s.replace(/\bMakenBrain\b/g, 'Maken Brain');
+  s = s.replace(/\bIA\b/g, 'intelligence artificielle');
+  s = s.replace(/\bLLM\b/gi, 'modèle de langage');
+  s = s.replace(/\bAPI\b/g, 'A P I');
+  s = s.replace(/\bSQL\b/g, 'S Q L');
+  s = s.replace(/\bURL\b/g, 'adresse web');
+  s = s.replace(/\bJSON\b/g, 'Jason');
+  s = s.replace(/\bUI\b/g, 'interface');
+  s = s.replace(/\bUX\b/g, 'expérience utilisateur');
+  s = s.replace(/\bRAG\b/g, 'R A G');
+  s = s.replace(/\bGPT\b/g, 'G P T');
+  s = s.replace(/\bvs\b\.?/gi, 'versus');
+  s = s.replace(/\betc\b\.?/gi, 'et cetera');
+  s = s.replace(/\be\.g\./gi, 'par exemple');
+  s = s.replace(/\bi\.e\./gi, "c'est-à-dire");
+  // Ponctuation → pauses naturelles
+  s = s.replace(/\.\.\./g, ',');
+  s = s.replace(/—/g, ', ');
+  s = s.replace(/\n{2,}/g, '. ');
+  s = s.replace(/\n/g, ', ');
+  // Emojis
+  s = s.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}]/gu, '');
+  // Caractères spéciaux restants
+  s = s.replace(/[_~^]/g, '');
+  s = s.replace(/\s{2,}/g, ' ');
+  return s.trim();
+}
+
+function splitSentences(txt) {
+  // Découper aux frontières de phrases ; limiter chaque chunk à ~180 chars
+  const raw = txt.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [txt];
+  const chunks = [];
+  for (const sentence of raw) {
+    const s = sentence.trim();
+    if (!s) continue;
+    if (s.length <= 180) { chunks.push(s); continue; }
+    // Phrase trop longue : couper aux virgules
+    const parts = s.split(/,\s*/);
+    let buf = '';
+    for (const p of parts) {
+      if ((buf + p).length > 180 && buf) { chunks.push(buf.trim()); buf = p + ', '; }
+      else buf += p + ', ';
+    }
+    if (buf.trim()) chunks.push(buf.trim());
+  }
+  return chunks.filter(c => c.length > 1);
+}
+
 function speak(txt) {
   if (!('speechSynthesis' in window)) return;
-  const u = new SpeechSynthesisUtterance(txt);
-  u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.95;
-  speechSynthesis.speak(u);
+  speechSynthesis.cancel();
+  const processed = preprocessTTS(txt);
+  const chunks = splitSentences(processed);
+  let idx = 0;
+  function next() {
+    if (idx >= chunks.length) return;
+    const u = new SpeechSynthesisUtterance(chunks[idx++]);
+    u.lang = 'fr-FR';
+    u.rate = 0.95;
+    u.pitch = 1.0;
+    u.volume = 1.0;
+    u.onend = next;
+    speechSynthesis.speak(u);
+  }
+  next();
 }
 
 voiceBtn.onclick = () => {
@@ -617,7 +1018,11 @@ sendBtn.onclick = () => send(false);
 input.onkeydown = (e) => { if (e.key === 'Enter') send(false); };
 
 document.querySelectorAll('.chip').forEach(chip => {
-  chip.onclick = () => { input.value = chip.dataset.prompt; send(false); };
+  chip.onclick = () => {
+    input.value = chip.dataset.prompt;
+    if (chip.dataset.agent === 'true') setAgentMode(true);
+    send(false);
+  };
 });
 
 /* ── HISTORY SHEET ── */
@@ -631,14 +1036,19 @@ handle.onclick = () => sheet.classList.contains('open') ? closeSheet() : openShe
 document.getElementById('sheet-close').onclick = closeSheet;
 document.getElementById('sheet-grabber').onclick = closeSheet;
 backdrop.onclick = closeSheet;
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSheet(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('admin-modal').classList.contains('open')) closeSheet(); });
 
 async function loadHistory() {
   try {
-    const r = await fetch(`${API}/history/list`);
+    const r = await fetch(`${API}/history/list`, { headers: getHeaders({}) });
     const d = await r.json();
     const list = document.getElementById('history-list');
     list.innerHTML = '';
+    if (!d.sessions || !d.sessions.length) {
+      list.innerHTML = '<div class="hist-empty">Aucune session enregistrée</div>';
+      loadIdentity();
+      return;
+    }
     d.sessions.forEach(s => {
       const item = document.createElement('div');
       item.className = 'hist-item' + (s.id === currentSession ? ' active' : '');
@@ -658,7 +1068,7 @@ async function loadIdentity() {
       fetch(`${API}/identity/projects`).then(r => r.json())
     ]);
     document.getElementById('user-role').textContent = prof.role;
-    document.getElementById('user-values').textContent = prof.core_values.join(' · ');
+    document.getElementById('user-values').textContent = (prof.core_values || []).join(' · ');
     const pList = document.getElementById('active-projects-list');
     pList.innerHTML = proj.length ? '' : '<div class="hist-empty">Aucun projet actif</div>';
     proj.forEach(p => { pList.innerHTML += `<div class="project-chip">${p.name}</div>`; });
@@ -712,7 +1122,6 @@ function triggerFile(type) {
   });
 });
 
-// NB: adapte l'URL ci-dessous (/ingest/upload) à la route réelle exposée par ton backend FastAPI
 function uploadFiles(fileList) {
   const form = new FormData();
   Array.from(fileList).forEach(f => form.append('files', f, f.webkitRelativePath || f.name));
@@ -723,6 +1132,7 @@ function uploadFiles(fileList) {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', `${API}/ingest/upload`);
+  if (adminApiKey) xhr.setRequestHeader('X-API-Key', adminApiKey);
   xhr.upload.onprogress = (e) => { if (e.lengthComputable) progressFill.style.width = `${Math.round(e.loaded / e.total * 100)}%`; };
   xhr.onload = () => {
     progressFill.style.width = '100%';
@@ -733,9 +1143,13 @@ function uploadFiles(fileList) {
   xhr.send(form);
 }
 
+/* ── ADMIN PANEL SHEET LOGOUT ── */
+document.getElementById('admin-logout-sheet').onclick = logoutAdmin;
+
 window.onload = () => {
   if (currentSession) loadSession(currentSession); else input.focus();
   loadIdentity();
+  if (adminApiKey) loadAdminPanel();
 };
 </script>
 </body>

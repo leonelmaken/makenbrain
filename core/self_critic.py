@@ -44,19 +44,11 @@ def analyze_answer(
     issues = _detect_issues(original, context_available)
     corrected = original
 
-    if confidence < 0.60 and not _starts_with_uncertainty_guard(corrected):
-        corrected = (
-            "Avec les donnees actuellement disponibles, je dois formuler "
-            "cela comme une hypothese plutot qu'une certitude.\n\n"
-            f"{corrected}"
-        )
+    # Confiance basse : le LLM exprime lui-même l'incertitude via le prompt système.
+    # On n'ajoute aucun préambule académique automatique.
 
-    if "missing_sources" in issues and confidence < 0.75:
-        corrected = (
-            f"{corrected}\n\n"
-            "Point de vigilance: je ne dispose pas encore de sources "
-            "externes verifiees pour confirmer cette reponse."
-        )
+    # Sources manquantes : on laisse la réponse telle quelle.
+    # Le score de confiance bas est déjà visible dans les métadonnées.
 
     return {
         "answer": corrected,

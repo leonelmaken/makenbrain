@@ -149,15 +149,24 @@ def get_registry() -> AgentRegistry:
 
 
 def register_defaults() -> None:
-    """Enregistre les agents par défaut de la Phase 5.
+    """Enregistre les agents par défaut (Phases 5 et 6).
 
     À appeler une seule fois dans le lifespan FastAPI, après l'initialisation
     de la mémoire vectorielle.
 
     Agents enregistrés :
-        - ReasoningAgent (pipeline 3.1→3.5)
+        - ReasoningAgent  (pipeline 3.1→3.5)           [Phase 5]
+        - MemoryAgent     (lecture/écriture ChromaDB)   [Phase 6]
+        - PlanningAgent   (décomposition de tâches)     [Phase 6]
+        - ResearchAgent   (stub — implémentation Ph. 7) [Phase 6]
     """
     from core.agents.reasoning_agent import ReasoningAgent
+    from core.agents.memory_agent    import MemoryAgent
+    from core.agents.planning_agent  import PlanningAgent
+    from core.agents.research_agent  import ResearchAgent
 
     registry = get_registry()
     registry.register(ReasoningAgent())
+    registry.register(MemoryAgent())
+    registry.register(PlanningAgent())
+    registry.register(ResearchAgent())

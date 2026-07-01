@@ -22,7 +22,7 @@ from core.config import settings
 from core.rate_limit import enforce_rate_limit
 from core.supabase_client import get_supabase_admin_client
 from core.user_service import UserService, UserServiceError
-from models.user import AuthUserIdentity, User, UserProfile
+from models.user import AuthUserIdentity, User, UserProfile, UserRole
 
 logger = logging.getLogger("makenbrain.auth")
 
@@ -136,6 +136,39 @@ def _get_auth_value(auth_user: Any, field_name: str) -> Any:
     if isinstance(auth_user, dict):
         return auth_user.get(field_name)
     return getattr(auth_user, field_name, None)
+
+
+def require_chat_user(
+    credentials: HTTPAuthorizationCredentials | None = Security(_bearer_auth),
+    api_key: str | None = Security(_api_key_header),
+) -> User:
+    """Authentification pour POST /chat/ : accepte Bearer Supabase OU X-API-Key admin.
+
+    Chemin 1 — Bearer présent : délègue à require_supabase_user (comportement inchangé).
+    Chemin 2 — X-API-Key valide : retourne un User admin synthétique (mode SuperAdmin).
+    Chemin 3 — Aucun credential valide : 401.
+    """
+    if credentials is not None and credentials.scheme.lower() == "bearer":
+        return require_supabase_user(credentials)
+
+    if not settings.ADMIN_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Authentification non configurée côté serveur (ADMIN_API_KEY manquant).",
+        )
+    if api_key and hmac.compare_digest(api_key, settings.ADMIN_API_KEY):
+        return User(id="superadmin", name="Super Admin", role=UserRole.ADMIN)
+
+    audit_event(
+        action="auth.denied",
+        tool="auth",
+        result="missing Bearer token and invalid or absent X-API-Key",
+        success=False,
+    )
+    raise HTTPException(
+        status_code=401,
+        detail="Authentification requise : Bearer Supabase ou X-API-Key admin (en-tête X-API-Key).",
+    )
 
 
 # Composite dependency reused on sensitive internal endpoints:

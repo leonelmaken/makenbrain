@@ -2,5 +2,5 @@
 from __future__ import annotations
 
 APP_NAME = "MakenBrain"
-APP_VERSION = "0.10.0"
-APP_RELEASE_NAME = "Phase 5 Multi-Agent Foundations"
+APP_VERSION = "0.12.0"
+APP_RELEASE_NAME = "Phase 7 ResearchAgent Wikipedia DuckDuckGo"
