@@ -18,6 +18,28 @@ logger = logging.getLogger("makenbrain.user_memories")
 
 USER_MEMORIES_TABLE = "user_memories"
 
+# ── Disjoncteur table absente ─────────────────────────────────────────────────
+# Si Supabase repond PGRST205 (table introuvable dans le schema), la
+# fonctionnalite memoire utilisateur est desactivee proprement jusqu'au
+# redemarrage : un seul warning, zero traceback repete, aucun impact sur
+# le chat. Executer migrations/001_create_user_memories.sql pour l'activer.
+_table_missing = False
+
+
+def _detect_missing_table(exc: Exception) -> bool:
+    """Detecte PGRST205 et bascule le disjoncteur (avec un warning unique)."""
+    global _table_missing
+    if "PGRST205" not in str(exc):
+        return False
+    if not _table_missing:
+        logger.warning(
+            "Table public.user_memories absente (PGRST205) — memoire utilisateur "
+            "desactivee. Executer migrations/001_create_user_memories.sql dans "
+            "Supabase puis redemarrer le serveur."
+        )
+    _table_missing = True
+    return True
+
 
 class UserMemoryServiceError(RuntimeError):
     """Erreur racine pour les operations de memoire utilisateur.
@@ -69,9 +91,13 @@ class UserMemoryService:
         )
         payload = memory.model_dump(mode="json")
 
+        if _table_missing:
+            raise UserMemoryServiceError("Table user_memories absente — memoire desactivee.")
         try:
             response = self._client.table(USER_MEMORIES_TABLE).insert(payload).execute()
         except Exception as exc:  # noqa: BLE001 - Supabase SDK exceptions vary by version.
+            if _detect_missing_table(exc):
+                raise UserMemoryServiceError("Table user_memories absente — memoire desactivee.") from exc
             logger.exception("Creation memoire utilisateur Supabase echouee.")
             raise UserMemoryServiceError(f"Creation memoire utilisateur impossible : {exc}") from exc
 
@@ -82,6 +108,8 @@ class UserMemoryService:
 
     def get_user_memories(self, user_id: UUID | str) -> list[dict[str, Any]]:
         """Retourne toutes les memoires appartenant a un utilisateur."""
+        if _table_missing:
+            return []
         try:
             response = (
                 self._client.table(USER_MEMORIES_TABLE)
@@ -90,6 +118,8 @@ class UserMemoryService:
                 .execute()
             )
         except Exception as exc:  # noqa: BLE001
+            if _detect_missing_table(exc):
+                return []
             logger.exception("Lecture memoires utilisateur Supabase echouee.")
             raise UserMemoryServiceError(f"Lecture memoires utilisateur impossible : {exc}") from exc
 
@@ -107,6 +137,8 @@ class UserMemoryService:
                 .execute()
             )
         except Exception as exc:  # noqa: BLE001
+            if _detect_missing_table(exc):
+                raise UserMemoryNotFoundError(f"Memoire utilisateur introuvable : {memory_id}") from exc
             logger.exception("Lecture memoire utilisateur Supabase echouee.")
             raise UserMemoryServiceError(f"Lecture memoire utilisateur impossible : {exc}") from exc
 
@@ -136,6 +168,8 @@ class UserMemoryService:
                 .execute()
             )
         except Exception as exc:  # noqa: BLE001
+            if _detect_missing_table(exc):
+                raise UserMemoryNotFoundError(f"Memoire utilisateur introuvable : {memory_id}") from exc
             logger.exception("Mise a jour memoire utilisateur Supabase echouee.")
             raise UserMemoryServiceError(f"Mise a jour memoire utilisateur impossible : {exc}") from exc
 
@@ -155,6 +189,8 @@ class UserMemoryService:
                 .execute()
             )
         except Exception as exc:  # noqa: BLE001
+            if _detect_missing_table(exc):
+                raise UserMemoryNotFoundError(f"Memoire utilisateur introuvable : {memory_id}") from exc
             logger.exception("Suppression memoire utilisateur Supabase echouee.")
             raise UserMemoryServiceError(f"Suppression memoire utilisateur impossible : {exc}") from exc
 

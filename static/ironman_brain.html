@@ -332,6 +332,153 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
   #history-sheet { width:96vw; max-height:84vh; }
   .msg { max-width:88%; }
 }
+
+/* ── AUTH OVERLAY ─────────────────────────────────────────── */
+#auth-overlay {
+  position:fixed; inset:0; z-index:200;
+  background:rgba(5,6,10,0.97); backdrop-filter:blur(20px);
+  display:flex; align-items:center; justify-content:center;
+  transition:opacity .35s ease, visibility .35s;
+}
+#auth-overlay.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+.auth-card {
+  background:var(--bg-elevated); border:1px solid var(--border);
+  border-radius:20px; padding:44px 40px; width:360px; text-align:center;
+  box-shadow:0 32px 80px rgba(0,0,0,.5);
+}
+.auth-logo { font-size:24px; font-family:'Syncopate',sans-serif; font-weight:700;
+  color:var(--text-bright); margin-bottom:6px; letter-spacing:2px; }
+.auth-logo span { color:var(--accent); }
+.auth-sub { font-size:10px; color:var(--text-dim); letter-spacing:2.5px;
+  text-transform:uppercase; margin-bottom:30px; }
+.auth-btn {
+  width:100%; padding:12px; border:1px solid var(--border); border-radius:10px;
+  background:rgba(255,255,255,.04); color:var(--text-bright); font-size:13px;
+  cursor:pointer; transition:.18s; display:flex; align-items:center; justify-content:center;
+  gap:10px; margin-bottom:10px; font-family:inherit;
+}
+.auth-btn:hover { background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.18); }
+.auth-btn.google { border-color:rgba(66,133,244,.4); }
+.auth-btn.github { border-color:rgba(255,255,255,.14); }
+.auth-btn.primary {
+  background:var(--accent); color:#05060a; border-color:transparent;
+  font-weight:600; margin-top:4px;
+}
+.auth-btn.primary:hover { background:#26d4b5; }
+.auth-divider {
+  display:flex; align-items:center; gap:10px; margin:14px 0;
+  font-size:11px; color:var(--text-dim);
+}
+.auth-divider::before,.auth-divider::after { content:''; flex:1; height:1px; background:var(--border); }
+.auth-input {
+  width:100%; padding:11px 14px; border:1px solid var(--border); border-radius:9px;
+  background:rgba(255,255,255,.04); color:var(--text-bright); font-size:13px;
+  margin-bottom:10px; font-family:inherit; outline:none; transition:.18s;
+}
+.auth-input:focus { border-color:rgba(45,226,201,.4); }
+.auth-input::placeholder { color:var(--text-dim); }
+.auth-skip {
+  margin-top:18px; font-size:11px; color:var(--text-dim); cursor:pointer;
+  text-decoration:underline; text-underline-offset:3px; background:none; border:none;
+  font-family:inherit;
+}
+.auth-skip:hover { color:var(--text); }
+.auth-error { font-size:11px; color:var(--danger); margin-bottom:10px; min-height:16px; }
+/* Auth user pill in HUD — position fixe sous le status-hud, toujours visible */
+#auth-user-hud {
+  position:fixed; top:54px; right:28px; z-index:60;
+  display:flex; align-items:center; gap:8px;
+  padding:5px 12px; border-radius:20px;
+  background:rgba(255,255,255,.05); border:1px solid var(--border);
+  font-size:11px; color:var(--text-dim); letter-spacing:1px;
+  backdrop-filter:blur(8px);
+}
+#auth-user-hud.hidden { display:none; }
+/* Bouton de déconnexion du panneau latéral — visible pour tout utilisateur */
+#sheet-logout-btn {
+  width:100%; margin-top:18px; padding:10px;
+  border:1px solid rgba(255,90,90,.35); border-radius:10px;
+  background:rgba(255,90,90,.06); color:#ff7a7a;
+  font-size:12px; letter-spacing:1px; cursor:pointer; font-family:inherit;
+  transition:.18s;
+}
+#sheet-logout-btn:hover { background:rgba(255,90,90,.14); }
+/* Bouton renommer dans l'historique */
+.hist-rename { opacity:.45; cursor:pointer; padding:2px; }
+.hist-rename:hover { opacity:1; color:var(--accent); }
+
+/* ── RENDU MARKDOWN des réponses IA ───────────────────────── */
+.msg-body.md { line-height:1.65; }
+.msg-body.md p { margin:0 0 10px; }
+.msg-body.md p:last-child { margin-bottom:0; }
+.msg-body.md h1, .msg-body.md h2, .msg-body.md h3, .msg-body.md h4 {
+  color:var(--text-bright); font-weight:600; margin:16px 0 8px; line-height:1.3;
+}
+.msg-body.md h1 { font-size:17px; } .msg-body.md h2 { font-size:15.5px; }
+.msg-body.md h3 { font-size:14px; } .msg-body.md h4 { font-size:13px; }
+.msg-body.md h1:first-child, .msg-body.md h2:first-child, .msg-body.md h3:first-child { margin-top:0; }
+.msg-body.md strong { color:var(--text-bright); font-weight:600; }
+.msg-body.md ul, .msg-body.md ol { margin:8px 0 12px 22px; padding:0; }
+.msg-body.md li { margin:4px 0; }
+.msg-body.md li > ul, .msg-body.md li > ol { margin-bottom:4px; }
+.msg-body.md code {
+  background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.08);
+  border-radius:5px; padding:1.5px 6px; font-size:12px;
+  font-family:'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  color:var(--accent);
+}
+.msg-body.md pre {
+  background:#0b0e14; border:1px solid var(--border); border-radius:10px;
+  padding:13px 15px; overflow-x:auto; margin:10px 0 12px;
+}
+.msg-body.md pre code {
+  background:none; border:none; padding:0; color:inherit;
+  font-size:12.5px; line-height:1.55;
+}
+.msg-body.md blockquote {
+  border-left:3px solid var(--accent); margin:10px 0; padding:4px 14px;
+  color:var(--text-dim); font-style:italic;
+}
+.msg-body.md table { border-collapse:collapse; margin:10px 0 12px; font-size:12.5px; }
+.msg-body.md th, .msg-body.md td { border:1px solid var(--border); padding:6px 12px; text-align:left; }
+.msg-body.md th { background:rgba(255,255,255,.05); color:var(--text-bright); }
+.msg-body.md a { color:var(--accent); text-decoration:underline; text-underline-offset:3px; }
+.msg-body.md hr { border:none; border-top:1px solid var(--border); margin:14px 0; }
+.msg-body.md img { max-width:100%; border-radius:8px; }
+
+/* ── SOURCES WEB sous les réponses (recherche ancrée) ─────── */
+.sources-block { margin-top:12px; padding-top:10px; border-top:1px solid var(--border); }
+.sources-title { font-size:9px; letter-spacing:2.5px; color:var(--text-dim); margin-bottom:8px; text-transform:uppercase; }
+.source-card {
+  display:flex; align-items:center; gap:10px; padding:7px 11px; margin-bottom:6px;
+  border:1px solid var(--border); border-radius:9px; background:rgba(255,255,255,.03);
+  text-decoration:none; transition:.15s;
+}
+.source-card:hover { background:rgba(255,255,255,.07); border-color:rgba(45,226,201,.35); }
+.source-num {
+  min-width:18px; height:18px; border-radius:5px; background:rgba(45,226,201,.12);
+  color:var(--accent); font-size:10px; display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.source-favicon { width:16px; height:16px; border-radius:4px; flex-shrink:0; }
+.source-info { display:flex; flex-direction:column; overflow:hidden; }
+.source-name { font-size:12px; color:var(--text-bright); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.source-domain { font-size:10px; color:var(--text-dim); }
+.sources-images { display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+.sources-images a { display:block; }
+.sources-images img {
+  height:74px; border-radius:8px; border:1px solid var(--border);
+  object-fit:cover; transition:.15s;
+}
+.sources-images a:hover img { border-color:var(--accent); transform:scale(1.04); }
+#auth-avatar { width:20px; height:20px; border-radius:50%;
+  border:1px solid var(--border); background:var(--bg-elevated); object-fit:cover; }
+#auth-logout-btn {
+  background:none; border:none; color:var(--text-dim); cursor:pointer;
+  font-size:10px; letter-spacing:1px; text-transform:uppercase; padding:0;
+  font-family:inherit;
+}
+#auth-logout-btn:hover { color:var(--danger); }
 </style>
 </head>
 <body>
@@ -348,6 +495,12 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 </div>
 
 <div id="admin-badge"><div id="admin-badge-dot"></div>SUPER ADMIN</div>
+
+<div id="auth-user-hud" class="hidden">
+  <img id="auth-avatar" src="" alt="">
+  <span id="auth-email-display"></span>
+  <button id="auth-logout-btn" onclick="signOutSupabase()">Déco</button>
+</div>
 
 <!-- Admin modal -->
 <div id="admin-modal">
@@ -403,20 +556,23 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
       <div id="agents-grid"></div>
       <button id="admin-logout-sheet" class="mono" onclick="logoutAdmin()">Déconnecter Super Admin</button>
     </div>
+
+    <!-- Déconnexion — visible pour tout utilisateur authentifié -->
+    <button id="sheet-logout-btn" class="mono" onclick="Auth.logout()">Se déconnecter</button>
   </div>
 </div>
 
 <div id="app">
   <div id="welcome">
     <div class="eyebrow mono"><span id="eyebrow-dot"></span>SYSTÈME EN LIGNE</div>
-    <h1 id="greet">Bonjour, MAKEN.</h1>
+    <h1 id="greet">Bonjour.</h1>
     <p class="sub">Comment puis-je assister ton génie aujourd'hui ?</p>
     <div class="chips">
-      <div class="chip mono" data-prompt="Quelles sont les priorités sur le projet ITAG ?">
+      <div class="chip mono" data-prompt="Quelles sont mes priorités en ce moment ?">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg>
-        Projet ITAG
+        Mes priorités
       </div>
-      <div class="chip mono" data-prompt="Analyse l'architecture de mon projet MakenBrain." data-agent="true">
+      <div class="chip mono" data-prompt="Analyse l'architecture de mon projet en cours." data-agent="true">
         <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7.5 7.2L11 16.4M16.5 7.2L13 16.4M8 6h8"/></svg>
         Analyse système
       </div>
@@ -480,14 +636,24 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+<!-- Rendu markdown des réponses : marked (parseur) + DOMPurify (anti-XSS) + highlight.js (code) -->
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.0/dist/purify.min.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
+<script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
 <script>
 const API = 'http://localhost:8000';
+
+/* [DIAG] Journal d'exécution temporaire — à supprimer après résolution */
+const MBLOG = (tag, msg) => console.log(`[${tag}] +${(performance.now() / 1000).toFixed(3)}s ${msg}`);
 const SEND_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>';
 const STOP_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
 const TRASH_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg>';
+const RENAME_ICON = '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>';
 
-let currentSession = localStorage.getItem('mb_session');
+let currentSession = localStorage.getItem('mb_session');  // session de CHAT (pas d'auth)
 let voiceAlwaysOn = localStorage.getItem('mb_voice_on') === 'true';
 let isThinking = false;
 let isRecording = false;
@@ -495,17 +661,250 @@ let abortController = null;
 let actingTimer = null;
 let agentMode = false;
 
-/* ── SUPER ADMIN ── */
-let adminApiKey = sessionStorage.getItem('mb_admin_key') || '';
+/* ════════════════════════════════════════════════════════════════════
+   AUTH — point de contrôle UNIQUE de l'authentification.
+   Session, JWT, OAuth, login, logout, timers, listeners et intercepteur
+   401 sont tous gérés ici. Aucune autre partie du code ne doit toucher
+   au client Supabase ni aux storages d'auth.
+   ════════════════════════════════════════════════════════════════════ */
+const Auth = {
+  client: null,        // client Supabase (null tant que non initialisé)
+  session: null,       // session Supabase courante (contient le JWT)
+  apiKey: '',          // clé X-API-Key (mode développeur)
+  _cfg: null,          // config publique (/config/public)
+  _sub: null,          // abonnement onAuthStateChange — désabonnable
+  _timers: [],         // ids de TOUS les setInterval gérés par l'application
+  _signingOut: false,  // anti-réentrance logout
+  _recovery: null,     // promesse partagée de récupération après 401
 
-function getHeaders(extra = {}) {
-  const h = { 'Content-Type': 'application/json', ...extra };
-  if (adminApiKey) h['X-API-Key'] = adminApiKey;
-  return h;
+  get isAuthenticated() { return !!(this.session || this.apiKey); },
+
+  headers(extra = {}) {
+    const h = { 'Content-Type': 'application/json', ...extra };
+    if (this.session?.access_token) h['Authorization'] = `Bearer ${this.session.access_token}`;
+    else if (this.apiKey) h['X-API-Key'] = this.apiKey;
+    return h;
+  },
+
+  /* ── Démarrage — seule fonction appelée par window.onload ── */
+  async init() {
+    MBLOG('BOOT', 'Auth.init');
+    this.apiKey = sessionStorage.getItem('mb_admin_key') || '';
+    try {
+      this._cfg = await _origFetch(`${API}/config/public`).then(r => r.json());
+    } catch (e) {
+      MBLOG('BOOT', `config publique indisponible : ${e?.message || e}`);
+      this._cfg = {};
+    }
+    if (!this._cfg.supabase_url) {
+      MBLOG('BOOT', 'Supabase non configuré — seul le mode X-API-Key est possible');
+      if (this.apiKey) this._enterApp();
+      return;
+    }
+    this._createClient();
+    const { data: { session } } = await this.client.auth.getSession();
+    MBLOG('BOOT', `getSession → ${session ? (session.user?.email || '?') : 'aucune session'}`);
+    if (session) this._onSignedIn(session);
+    else if (this.apiKey) this._enterApp();
+    // Sinon : l'overlay de connexion reste visible — rien ne se charge.
+  },
+
+  _createClient() {
+    this.client = window.supabase.createClient(this._cfg.supabase_url, this._cfg.supabase_anon_key, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
+    });
+    const { data } = this.client.auth.onAuthStateChange((event, session) => {
+      MBLOG('AUTH', `événement ${event}`);
+      if (this._signingOut) return; // aucun événement ne passe pendant un logout
+      if (event === 'SIGNED_IN' && session) {
+        // Supabase ré-émet SIGNED_IN à chaque retour de focus sur l'onglet.
+        // Si c'est le MÊME utilisateur déjà connecté : mise à jour silencieuse
+        // du token, SANS re-render (sinon le chat clignote et les blocs
+        // sources/images sont effacés).
+        if (this.session && this.session.user?.id === session.user?.id) {
+          this.session = session;
+          return;
+        }
+        this._onSignedIn(session);
+      }
+      else if (event === 'TOKEN_REFRESHED' && session) this.session = session;
+      else if (event === 'SIGNED_OUT') this._onSignedOut();
+    });
+    this._sub = data.subscription;
+  },
+
+  _destroyClient() {
+    if (this._sub) { try { this._sub.unsubscribe(); } catch (_) {} this._sub = null; }
+    if (this.client) { try { this.client.auth.stopAutoRefresh(); } catch (_) {} }
+    this.client = null;
+  },
+
+  /* ── Connexions ── */
+  async loginOAuth(provider) {
+    if (!this.client) { _setAuthError("Service d'authentification indisponible."); return; }
+    _clearAuthError();
+    const { error } = await this.client.auth.signInWithOAuth({
+      provider, options: { redirectTo: window.location.href },
+    });
+    if (error) { MBLOG('AUTH', `OAuth ${provider} refusé : ${error.message}`); _setAuthError(error.message); }
+  },
+
+  async loginEmail(email, password) {
+    if (!this.client) { _setAuthError("Service d'authentification indisponible."); return; }
+    _clearAuthError();
+    const { error } = await this.client.auth.signInWithPassword({ email, password });
+    if (error) _setAuthError(error.message);
+  },
+
+  loginApiKey(key) {
+    this.apiKey = key;
+    sessionStorage.setItem('mb_admin_key', key);
+    this._enterApp();
+  },
+
+  /* ── Déconnexion : destruction totale, sans rechargement ── */
+  async logout() {
+    if (this._signingOut) return;
+    this._signingOut = true;
+    MBLOG('AUTH', 'logout — arrêt listeners/timers, purge état, retour connexion');
+    const client = this.client;
+    // 1. Plus AUCUNE activité : listener SDK, refresh token, pollings.
+    this._destroyClient();
+    this.clearTimers();
+    // 2. Purge complète de l'état et des storages.
+    this.session = null;
+    this.apiKey = '';
+    currentSession = null;
+    Object.keys(localStorage).filter(k => k.startsWith('sb-')).forEach(k => localStorage.removeItem(k));
+    sessionStorage.removeItem('mb_admin_key');
+    localStorage.removeItem('mb_session');
+    // 3. Interface : retour immédiat à l'écran de connexion.
+    this._onSignedOut();
+    // 4. Révocation serveur en arrière-plan, bornée à 2 s — jamais bloquante.
+    try {
+      if (client) await Promise.race([client.auth.signOut(), new Promise(r => setTimeout(r, 2000))]);
+    } catch (_) {}
+    // 5. Client recréé, prêt pour une reconnexion — sans F5.
+    if (this._cfg?.supabase_url) this._createClient();
+    this._signingOut = false;
+    MBLOG('AUTH', 'logout terminé');
+  },
+
+  /* ── Timers : registre central — tout setInterval de l'app passe ici ── */
+  registerTimer(fn, ms) { const id = setInterval(fn, ms); this._timers.push(id); return id; },
+  clearTimers() { this._timers.forEach(clearInterval); this._timers = []; },
+
+  /* ── Transitions ── */
+  _onSignedIn(session) {
+    this.session = session;
+    const user = session.user;
+    MBLOG('AUTH', `connecté : ${user?.email || '?'} (role=${user?.app_metadata?.role || 'user'})`);
+    // Nettoyer les tokens OAuth de l'URL après un callback (évite tout retraitement)
+    if (window.location.hash.includes('access_token') || window.location.search.includes('code=')) {
+      history.replaceState(null, '', window.location.pathname);
+    }
+    // HUD utilisateur
+    const avatar = document.getElementById('auth-avatar');
+    if (avatar && user?.user_metadata?.avatar_url) avatar.src = user.user_metadata.avatar_url;
+    const emailEl = document.getElementById('auth-email-display');
+    if (emailEl) emailEl.textContent = user?.email || '';
+    document.getElementById('auth-user-hud').classList.remove('hidden');
+    // Greeting personnalisé — jamais de nom en dur
+    const greetEl = document.getElementById('greet');
+    if (greetEl) {
+      const name = user?.user_metadata?.full_name || user?.user_metadata?.name || user?.email?.split('@')[0] || '';
+      greetEl.textContent = name ? `${_greetWord()}, ${name}.` : `${_greetWord()}.`;
+    }
+    // Badge admin : uniquement depuis app_metadata (posé côté serveur, infalsifiable)
+    const role = user?.app_metadata?.role;
+    const isAdmin = role === 'superadmin' || role === 'admin';
+    document.getElementById('admin-badge').classList.toggle('visible', isAdmin);
+    document.getElementById('admin-panel').classList.toggle('visible', isAdmin);
+    this._enterApp();
+    if (isAdmin) loadAdminPanel();
+    loadHistory();
+    if (currentSession) loadSession(currentSession);
+  },
+
+  _enterApp() {
+    document.getElementById('auth-overlay').classList.add('hidden');
+    // Pollings : actifs uniquement en session authentifiée.
+    this.clearTimers();
+    pollHealth();
+    this.registerTimer(pollHealth, 30000);
+  },
+
+  _onSignedOut() {
+    // Réinitialisation complète de toute l'interface privée.
+    document.getElementById('auth-user-hud').classList.add('hidden');
+    document.getElementById('admin-badge').classList.remove('visible');
+    document.getElementById('admin-panel').classList.remove('visible');
+    const adminLogout = document.getElementById('admin-logout');
+    if (adminLogout) adminLogout.classList.remove('visible');
+    chat.innerHTML = '';
+    chat.classList.remove('active');
+    welcome.classList.remove('hide');
+    document.getElementById('history-list').innerHTML = '';
+    document.getElementById('user-role').textContent = '';
+    document.getElementById('user-values').textContent = '';
+    document.getElementById('active-projects-list').innerHTML = '';
+    document.getElementById('greet').textContent = `${_greetWord()}.`;
+    document.getElementById('auth-overlay').classList.remove('hidden');
+    MBLOG('UI', 'écran de connexion affiché — interface privée vidée');
+  },
+
+  /* ── Récupération 401 : UN SEUL traitement partagé entre requêtes ── */
+  tryRecover() {
+    if (this._recovery) return this._recovery;
+    this._recovery = (async () => {
+      try {
+        if (!this.client) return false;
+        const { data, error } = await this.client.auth.refreshSession();
+        if (!error && data?.session) {
+          this.session = data.session;
+          MBLOG('AUTH', 'refresh OK — session valide conservée (le 401 était transitoire)');
+          return true;
+        }
+        MBLOG('AUTH', `refresh échoué (${error?.message || 'aucune session'}) — session morte`);
+        return false;
+      } catch (_) {
+        return false;
+      } finally {
+        this._recovery = null;
+      }
+    })();
+    return this._recovery;
+  },
+};
+
+function _greetWord() {
+  const hr = new Date().getHours();
+  return hr < 5 || hr >= 18 ? 'Bonsoir' : hr < 12 ? 'Bonjour' : 'Bon retour';
 }
 
+/* ── Intercepteur 401 défensif — vérifie avant de déconnecter ── */
+const _origFetch = window.fetch.bind(window);
+window.fetch = async (...args) => {
+  const response = await _origFetch(...args);
+  if (response.status === 401 && Auth.session && !Auth._signingOut && String(args[0]).startsWith(API)) {
+    MBLOG('FETCH', `401 sur ${args[0]} — vérification de session avant toute déconnexion`);
+    const recovered = await Auth.tryRecover();
+    if (recovered) {
+      const init = args[1] ? { ...args[1] } : {};
+      init.headers = { ...(init.headers || {}), 'Authorization': `Bearer ${Auth.session.access_token}` };
+      return _origFetch(args[0], init);
+    }
+    console.warn('[MakenBrain] Session irrécupérable (401 confirmé) — déconnexion.');
+    await Auth.logout();
+  }
+  return response;
+};
+
+/* ── Aliases de compatibilité (appelés par le HTML et le reste du code) ── */
+function getHeaders(extra = {}) { return Auth.headers(extra); }
+
 function applyAdminUI() {
-  const active = !!adminApiKey;
+  const active = !!Auth.apiKey;
   document.getElementById('admin-badge').classList.toggle('visible', active);
   document.getElementById('admin-logout').classList.toggle('visible', active);
   document.getElementById('admin-panel').classList.toggle('visible', active);
@@ -513,22 +912,19 @@ function applyAdminUI() {
 }
 
 function loginAdmin(key) {
-  adminApiKey = key;
-  sessionStorage.setItem('mb_admin_key', key);
+  Auth.loginApiKey(key);
   applyAdminUI();
 }
 
 function logoutAdmin() {
-  adminApiKey = '';
-  sessionStorage.removeItem('mb_admin_key');
-  applyAdminUI();
   closeAdminModal();
+  Auth.logout();
 }
 
 function openAdminModal() {
   const modal = document.getElementById('admin-modal');
   const input = document.getElementById('admin-key-input');
-  input.value = adminApiKey;
+  input.value = Auth.apiKey;
   modal.classList.add('open');
   setTimeout(() => input.focus(), 100);
 }
@@ -601,8 +997,8 @@ async function pollHealth() {
     dot.title = 'Backend hors ligne';
   }
 }
-pollHealth();
-setInterval(pollHealth, 30000);
+// Le polling santé est démarré par Auth._enterApp() (session active uniquement)
+// et arrêté par Auth.logout() — plus aucun timer hors du registre Auth.
 
 /* ── AGENT MODE TOGGLE ── */
 const agentBtn = document.getElementById('agent-btn');
@@ -632,12 +1028,9 @@ const progressFill = document.getElementById('progress-fill');
 
 sendBtn.innerHTML = SEND_ICON;
 if (voiceAlwaysOn) voiceBtn.classList.add('active');
-applyAdminUI();
-
-(function () {
-  const hr = new Date().getHours();
-  document.getElementById('greet').textContent = `${hr < 5 || hr >= 18 ? 'Bonsoir' : hr < 12 ? 'Bonjour' : 'Bon retour'}, MAKEN.`;
-})();
+// Aucun élément d'interface lié à l'auth n'est affiché au parse :
+// le badge admin et l'app ne s'affichent qu'après Auth.init()/login.
+document.getElementById('greet').textContent = `${_greetWord()}.`;
 
 /* ── NEURAL CORE — THREE.JS ── */
 const STATES = {
@@ -822,21 +1215,125 @@ function addMsg(txt, isAi, isAgent = false) {
   }
   const body = document.createElement('div');
   body.className = 'msg-body';
-  body.textContent = txt;
+  if (isAi && window.marked && window.DOMPurify) {
+    // Réponses IA : rendu markdown sécurisé (titres, listes, gras, code…)
+    body.classList.add('md');
+    body.innerHTML = DOMPurify.sanitize(marked.parse(txt));
+    if (window.hljs) body.querySelectorAll('pre code').forEach(el => { try { hljs.highlightElement(el); } catch (_) {} });
+  } else {
+    // Messages utilisateur (ou librairies indisponibles) : texte brut
+    body.textContent = txt;
+  }
   div.appendChild(body);
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
 }
 
-let thinkingEl = null;
-function showThinking(label = 'ANALYSE NEURONALE') {
-  thinkingEl = document.createElement('div');
-  thinkingEl.id = 'thinking';
-  thinkingEl.innerHTML = `<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span id="thinking-text" class="mono">${label}</span>`;
-  chat.appendChild(thinkingEl);
+function appendSources(sources = [], images = []) {
+  // Affiche les sources web réelles et les images sous la dernière réponse IA.
+  // Construction DOM via textContent — jamais d'innerHTML sur des données externes.
+  if ((!sources || !sources.length) && (!images || !images.length)) return;
+  const aiMsgs = chat.querySelectorAll('.ai-msg');
+  const lastMsg = aiMsgs[aiMsgs.length - 1];
+  if (!lastMsg) return;
+
+  const block = document.createElement('div');
+  block.className = 'sources-block';
+
+  if (sources && sources.length) {
+    const title = document.createElement('div');
+    title.className = 'sources-title mono';
+    title.textContent = 'Sources';
+    block.appendChild(title);
+    sources.forEach((s, i) => {
+      if (!s.url) return;
+      let domain = '';
+      try { domain = new URL(s.url).hostname.replace(/^www\./, ''); } catch (_) {}
+      const card = document.createElement('a');
+      card.className = 'source-card';
+      card.href = s.url; card.target = '_blank'; card.rel = 'noopener noreferrer';
+      const num = document.createElement('span');
+      num.className = 'source-num'; num.textContent = i + 1;
+      // Logo du site (favicon) — identification visuelle immédiate de la source
+      const fav = document.createElement('img');
+      fav.className = 'source-favicon';
+      fav.src = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+      fav.alt = ''; fav.loading = 'lazy';
+      fav.onerror = () => fav.remove();
+      const info = document.createElement('span');
+      info.className = 'source-info';
+      const name = document.createElement('span');
+      name.className = 'source-name'; name.textContent = s.title || domain;
+      const dom = document.createElement('span');
+      dom.className = 'source-domain'; dom.textContent = domain;
+      info.appendChild(name); info.appendChild(dom);
+      card.appendChild(num); card.appendChild(fav); card.appendChild(info);
+      block.appendChild(card);
+    });
+  }
+
+  if (images && images.length) {
+    const gallery = document.createElement('div');
+    gallery.className = 'sources-images';
+    images.forEach(img => {
+      if (!img.thumbnail) return;
+      const link = document.createElement('a');
+      link.href = img.url || img.image || '#';
+      link.target = '_blank'; link.rel = 'noopener noreferrer';
+      const el = document.createElement('img');
+      el.src = img.thumbnail; el.alt = img.title || ''; el.loading = 'lazy';
+      el.onerror = () => link.remove();
+      link.appendChild(el);
+      gallery.appendChild(link);
+    });
+    if (gallery.childElementCount) block.appendChild(gallery);
+  }
+
+  lastMsg.appendChild(block);
   chat.scrollTop = chat.scrollHeight;
 }
-function hideThinking() { if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; } }
+
+let thinkingEl = null;
+let thinkingTimer = null;
+function showThinking(label = 'ANALYSE NEURONALE', phases = null) {
+  // phases : étapes affichées successivement pendant la génération
+  // (ex. recherche de sources → lecture → vérification → rédaction).
+  thinkingEl = document.createElement('div');
+  thinkingEl.id = 'thinking';
+  const firstLabel = (phases && phases.length) ? phases[0] : label;
+  thinkingEl.innerHTML = `<div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div><span id="thinking-text" class="mono">${firstLabel}</span>`;
+  chat.appendChild(thinkingEl);
+  chat.scrollTop = chat.scrollHeight;
+  if (phases && phases.length > 1) {
+    let idx = 0;
+    thinkingTimer = setInterval(() => {
+      idx++;
+      const el = document.getElementById('thinking-text');
+      if (!el || idx >= phases.length) {
+        clearInterval(thinkingTimer); thinkingTimer = null;
+        return;
+      }
+      el.textContent = phases[idx];
+    }, 3200);
+  }
+}
+function hideThinking() {
+  if (thinkingTimer) { clearInterval(thinkingTimer); thinkingTimer = null; }
+  if (thinkingEl) { thinkingEl.remove(); thinkingEl = null; }
+}
+
+// Miroir de l'heuristique backend : permet d'afficher les étapes de
+// recherche uniquement quand une recherche web sera réellement déclenchée.
+const WEB_TRIGGER_WORDS = ['actuel', 'actualité', "aujourd'hui", 'récent', 'récente',
+  'dernier', 'dernière', '2024', '2025', '2026', 'source',
+  'prouve', 'preuve', 'statistique', 'marché', 'prix de', 'combien coûte',
+  'qui est', "c'est qui", 'news', 'nouveauté', 'tendance', 'classement',
+  'milliardaire', 'vérifie', 'cherche', 'recherche sur', 'article',
+  'investissement', 'parle moi de', 'parle-moi de', 'entreprise', 'qui sont'];
+function needsWebSearchUI(message) {
+  const m = message.toLowerCase();
+  return WEB_TRIGGER_WORDS.some(t => m.includes(t));
+}
 
 function flashActing() {
   setBrainState('acting');
@@ -856,7 +1353,10 @@ async function send(requestedByVoice = false) {
 
   isThinking = true;
   const useAgent = agentMode;
-  showThinking(useAgent ? 'RAISONNEMENT EXPERT' : 'ANALYSE NEURONALE');
+  const webPhases = needsWebSearchUI(val)
+    ? ['RECHERCHE DE SOURCES WEB…', 'LECTURE DES RÉSULTATS…', 'VÉRIFICATION DES FAITS…', 'RÉDACTION DE LA RÉPONSE…']
+    : null;
+  showThinking(useAgent ? 'RAISONNEMENT EXPERT' : 'ANALYSE NEURONALE', webPhases);
   sendBtn.innerHTML = STOP_ICON;
   sendBtn.classList.add('stop');
   setBrainState('analyzing');
@@ -892,10 +1392,14 @@ async function send(requestedByVoice = false) {
         currentSession = data.session_id;
         localStorage.setItem('mb_session', currentSession);
         loadHistory();
+        // Le titre intelligent est généré en arrière-plan côté serveur :
+        // rafraîchir l'historique quelques secondes plus tard pour l'afficher.
+        setTimeout(loadHistory, 5000);
       }
       responseText = data.response;
       stopThinking();
       addMsg(responseText, true, false);
+      appendSources(data.web_sources, data.web_images);
     }
 
     flashActing();
@@ -1039,8 +1543,10 @@ backdrop.onclick = closeSheet;
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !document.getElementById('admin-modal').classList.contains('open')) closeSheet(); });
 
 async function loadHistory() {
+  if (!Auth.isAuthenticated) return; // jamais d'appel API sans auth établie
   try {
     const r = await fetch(`${API}/history/list`, { headers: getHeaders({}) });
+    /* [DIAG] */ MBLOG('UI', `loadHistory → HTTP ${r.status}`);
     const d = await r.json();
     const list = document.getElementById('history-list');
     list.innerHTML = '';
@@ -1052,7 +1558,10 @@ async function loadHistory() {
     d.sessions.forEach(s => {
       const item = document.createElement('div');
       item.className = 'hist-item' + (s.id === currentSession ? ' active' : '');
-      item.innerHTML = `<div class="hist-topic">${s.topic || 'Conversation'}</div><div class="hist-del">${TRASH_ICON}</div>`;
+      item.innerHTML = `<div class="hist-topic">${s.topic || 'Conversation'}</div>`
+        + `<div class="hist-rename" title="Renommer">${RENAME_ICON}</div>`
+        + `<div class="hist-del" title="Supprimer">${TRASH_ICON}</div>`;
+      item.querySelector('.hist-rename').onclick = (e) => renameSession(e, s.id, s.topic || '');
       item.querySelector('.hist-del').onclick = (e) => deleteSession(e, s.id);
       item.onclick = () => loadSession(s.id);
       list.appendChild(item);
@@ -1062,10 +1571,11 @@ async function loadHistory() {
 }
 
 async function loadIdentity() {
+  if (!Auth.isAuthenticated) return; // jamais d'appel API sans auth établie
   try {
     const [prof, proj] = await Promise.all([
-      fetch(`${API}/identity/profile`).then(r => r.json()),
-      fetch(`${API}/identity/projects`).then(r => r.json())
+      fetch(`${API}/identity/profile`, { headers: getHeaders({}) }).then(r => r.json()),
+      fetch(`${API}/identity/projects`, { headers: getHeaders({}) }).then(r => r.json())
     ]);
     document.getElementById('user-role').textContent = prof.role;
     document.getElementById('user-values').textContent = (prof.core_values || []).join(' · ');
@@ -1076,22 +1586,41 @@ async function loadIdentity() {
 }
 
 async function loadSession(id) {
+  if (!Auth.isAuthenticated) return; // jamais d'appel API sans auth établie
   currentSession = id; localStorage.setItem('mb_session', id);
   closeSheet();
   chat.innerHTML = '';
   startChatUI();
   try {
-    const r = await fetch(`${API}/history/${id}`);
+    const r = await fetch(`${API}/history/${id}`, { headers: getHeaders({}) });
     const d = await r.json();
-    d.messages.forEach(m => addMsg(m.content, m.role !== 'user'));
+    d.messages.forEach(m => {
+      addMsg(m.content, m.role !== 'user');
+      // Ré-afficher les preuves persistées avec le message (sources + images)
+      if (m.role !== 'user' && (m.web_sources?.length || m.web_images?.length)) {
+        appendSources(m.web_sources || [], m.web_images || []);
+      }
+    });
   } catch (e) {}
 }
 
 async function deleteSession(e, id) {
   e.stopPropagation();
   if (!confirm('Supprimer cette session ?')) return;
-  await fetch(`${API}/history/${id}`, { method: 'DELETE' });
+  await fetch(`${API}/history/${id}`, { method: 'DELETE', headers: getHeaders({}) });
   if (currentSession === id) newChat(); else loadHistory();
+}
+
+async function renameSession(e, id, currentTopic) {
+  e.stopPropagation();
+  const topic = prompt('Nouveau nom de la conversation :', currentTopic);
+  if (!topic || !topic.trim() || topic.trim() === currentTopic) return;
+  await fetch(`${API}/history/${id}`, {
+    method: 'PATCH',
+    headers: getHeaders({}),
+    body: JSON.stringify({ topic: topic.trim() }),
+  });
+  loadHistory();
 }
 
 function newChat() {
@@ -1132,7 +1661,9 @@ function uploadFiles(fileList) {
 
   const xhr = new XMLHttpRequest();
   xhr.open('POST', `${API}/ingest/upload`);
-  if (adminApiKey) xhr.setRequestHeader('X-API-Key', adminApiKey);
+  const _h = Auth.headers();
+  if (_h['Authorization']) xhr.setRequestHeader('Authorization', _h['Authorization']);
+  if (_h['X-API-Key'])     xhr.setRequestHeader('X-API-Key', _h['X-API-Key']);
   xhr.upload.onprogress = (e) => { if (e.lengthComputable) progressFill.style.width = `${Math.round(e.loaded / e.total * 100)}%`; };
   xhr.onload = () => {
     progressFill.style.width = '100%';
@@ -1146,11 +1677,74 @@ function uploadFiles(fileList) {
 /* ── ADMIN PANEL SHEET LOGOUT ── */
 document.getElementById('admin-logout-sheet').onclick = logoutAdmin;
 
-window.onload = () => {
-  if (currentSession) loadSession(currentSession); else input.focus();
-  loadIdentity();
-  if (adminApiKey) loadAdminPanel();
+/* ── AUTH — points d'entrée appelés par le HTML ────────────────
+   Toute la logique vit dans le module Auth (défini en tête de script).
+   Ces wrappers n'existent que parce que les attributs onclick du HTML
+   référencent ces noms. */
+function signInGoogle()   { Auth.loginOAuth('google'); }
+function signInGithub()   { Auth.loginOAuth('github'); }
+function signInEmail() {
+  const email = document.getElementById('auth-email-input').value.trim();
+  const pwd   = document.getElementById('auth-password-input').value;
+  if (!email || !pwd) { _setAuthError('Email et mot de passe requis.'); return; }
+  Auth.loginEmail(email, pwd);
+}
+function signOutSupabase() { Auth.logout(); }
+// Mode développeur : ouvre uniquement la saisie de clé — l'interface ne
+// s'affiche qu'après validation d'une clé (via loginAdmin → Auth.loginApiKey).
+function skipAuthDev() { openAdminModal(); }
+
+function _setAuthError(msg)  { const el = document.getElementById('auth-error'); if (el) el.textContent = msg; }
+function _clearAuthError()   { const el = document.getElementById('auth-error'); if (el) el.textContent = ''; }
+
+window.onload = async () => {
+  MBLOG('BOOT', 'window.onload — Auth.init() attendu avant tout chargement de données');
+  await Auth.init();
+  MBLOG('BOOT', `démarrage terminé — authentifié=${Auth.isAuthenticated}`);
+  if (!Auth.isAuthenticated) return; // écran de connexion — rien ne se charge
+  if (!Auth.session) {
+    // Mode X-API-Key : _onSignedIn n'a pas tourné → charger manuellement.
+    if (currentSession) loadSession(currentSession); else input.focus();
+    loadHistory(); // appelle loadIdentity() en fin de course
+    applyAdminUI();
+  }
+  // Mode Bearer : Auth._onSignedIn a déjà tout chargé.
 };
 </script>
+
+<!-- ── AUTH OVERLAY — démarre visible, caché après auth réussie ── -->
+<div id="auth-overlay">
+  <div class="auth-card">
+    <div class="auth-logo">MAKEN<span>BRAIN</span></div>
+    <div class="auth-sub">Cortex Neuronal Personnel</div>
+    <div id="auth-error" class="auth-error"></div>
+
+    <button class="auth-btn google" onclick="signInGoogle()">
+      <svg width="16" height="16" viewBox="0 0 24 24">
+        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
+        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+      </svg>
+      Continuer avec Google
+    </button>
+
+    <button class="auth-btn github" onclick="signInGithub()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.865 8.17 6.839 9.49.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.604-3.369-1.34-3.369-1.34-.454-1.156-1.11-1.464-1.11-1.464-.908-.62.069-.608.069-.608 1.003.07 1.531 1.03 1.531 1.03.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.564 9.564 0 0 1 12 6.844a9.59 9.59 0 0 1 2.504.337c1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.167 22 16.418 22 12c0-5.523-4.477-10-10-10z"/>
+      </svg>
+      Continuer avec GitHub
+    </button>
+
+    <div class="auth-divider">ou</div>
+
+    <input type="email"    id="auth-email-input"    class="auth-input" placeholder="Email" autocomplete="email">
+    <input type="password" id="auth-password-input" class="auth-input" placeholder="Mot de passe" autocomplete="current-password">
+    <button class="auth-btn primary" onclick="signInEmail()">Connexion</button>
+
+    <button class="auth-skip" onclick="skipAuthDev()">Mode développeur (X-API-Key)</button>
+  </div>
+</div>
+
 </body>
 </html>

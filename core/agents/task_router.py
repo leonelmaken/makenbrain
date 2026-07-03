@@ -76,14 +76,15 @@ class TaskRouter:
     async def route(self, task: AgentTask) -> RoutingPlan:
         """Calcule le plan d'exécution optimal pour une tâche donnée.
 
-        Phase 5 : retourne uniquement des agents séquentiels.
-        Phase 6+ : remplira également parallel_groups.
+        Phase 5 : un seul agent → séquentiel.
+        Phase 8 : plusieurs agents primaires → parallel_groups ;
+                  agents de fallback → meilleur en séquentiel + reste en parallèle.
 
         Args:
             task : La tâche à router.
 
         Returns:
-            RoutingPlan avec la liste ordonnée d'agents à exécuter.
+            RoutingPlan avec sequential et/ou parallel_groups renseignés.
         """
         candidates = self._registry.by_task_type(task.type)
 
@@ -92,7 +93,9 @@ class TaskRouter:
             if await agent.is_available():
                 available.append(agent)
 
+        fallback_used = False
         if not available:
+            fallback_used = True
             all_agents = self._registry.list_all()
             for agent in all_agents:
                 if await agent.is_available():
@@ -103,9 +106,22 @@ class TaskRouter:
         if not ranked:
             return RoutingPlan()
 
+        if len(ranked) == 1:
+            return RoutingPlan(sequential=ranked)
+
+        if fallback_used:
+            # Pas de correspondance par type : meilleur agent en séquentiel,
+            # les autres s'exécutent en parallèle comme exploration complémentaire.
+            return RoutingPlan(
+                sequential     = [ranked[0]],
+                parallel_groups= [ranked[1:]],
+                fallback       = ranked[-1],
+            )
+
+        # Plusieurs agents primaires pour ce type de tâche : exécution parallèle.
         return RoutingPlan(
-            sequential= ranked,
-            fallback  = ranked[-1] if len(ranked) > 1 else None,
+            parallel_groups= [ranked],
+            fallback       = ranked[-1],
         )
 
     def _rank(

@@ -380,7 +380,11 @@ class ResearchAgent(BaseAgent):
 
         def _sync(q: str, n: int) -> list[dict]:
             try:
-                from duckduckgo_search import DDGS  # noqa: PLC0415
+                # `ddgs` = successeur officiel de `duckduckgo_search` (renommé)
+                try:
+                    from ddgs import DDGS  # noqa: PLC0415
+                except ImportError:
+                    from duckduckgo_search import DDGS  # noqa: PLC0415
                 with DDGS() as ddgs:
                     return list(ddgs.text(q, max_results=n))
             except Exception:

@@ -67,7 +67,11 @@ async def run_auto_research(cfg: dict) -> dict:
             results.append({"type": "domain", "domain": domain, "error": str(e)})
 
     # 2. Requêtes de veille personnalisées
-    from duckduckgo_search import DDGS
+    # `ddgs` = successeur officiel de `duckduckgo_search` (paquet renommé)
+    try:
+        from ddgs import DDGS
+    except ImportError:
+        from duckduckgo_search import DDGS
     from core.ingestion import chunk_text
     from core.memory import add_memory
     from core.dedup import is_duplicate, register

@@ -100,12 +100,12 @@ def user_service() -> UserService:
 def test_create_user(user_service: UserService) -> None:
     """create_user inserts a row and returns a validated User model."""
     user = user_service.create_user(
-        UserCreate(id="user-1", email="maken@example.com", name="MAKEN")
+        UserCreate(id="user-1", email="maken@example.com", full_name="MAKEN")
     )
 
     assert user.id == "user-1"
     assert user.email == "maken@example.com"
-    assert user.name == "MAKEN"
+    assert user.full_name == "MAKEN"
     assert user.role is UserRole.USER
 
 
@@ -123,9 +123,9 @@ def test_update_user(user_service: UserService) -> None:
     """update_user persists mutable fields and validates the returned row."""
     user_service.create_user({"id": "user-1", "email": "maken@example.com"})
 
-    user = user_service.update_user("user-1", UserUpdate(name="Admin", role=UserRole.ADMIN))
+    user = user_service.update_user("user-1", UserUpdate(full_name="Admin", role=UserRole.ADMIN))
 
-    assert user.name == "Admin"
+    assert user.full_name == "Admin"
     assert user.role is UserRole.ADMIN
 
 

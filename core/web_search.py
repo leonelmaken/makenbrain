@@ -18,7 +18,13 @@ import re
 
 import httpx
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+
+# `ddgs` est le successeur officiel de `duckduckgo_search` (paquet renommé) :
+# l'ancien retourne des résultats vides et des rate-limits.
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS
 
 from core.dedup import is_duplicate, register
 from core.ingestion import chunk_text

@@ -58,7 +58,7 @@ class BrainConsciousness:
             f"{self.build_system_prompt(memory_context)}\n\n"
             f"Analyse cet evenement :\n{event_context}\n\n"
             "Reponds en 3 points courts :\n"
-            "1. Intention de MAKEN (ce qu'il essaie de faire)\n"
+            "1. Intention de l'utilisateur (ce qu'il essaie de faire)\n"
             "2. Lien avec une connaissance existante (NeuronGraph)\n"
             "3. Action proactive suggeree (outil, recherche, ou conseil)"
         )
@@ -272,7 +272,7 @@ class BrainConsciousness:
         """
         base_prompt = (
             "Tu es la conscience proactive de MakenBrain. "
-            "Tu aides MAKEN en tenant compte du contexte personnel disponible, "
+            "Tu aides l'utilisateur en tenant compte du contexte personnel disponible, "
             "sans inventer de souvenirs absents. "
             "Quand les donnees manquent, tu signales l'incertitude et tu "
             "formules des hypotheses plutot que des certitudes."

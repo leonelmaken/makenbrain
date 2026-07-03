@@ -11,8 +11,9 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class UserRole(str, Enum):
     """Allowed application roles for a MakenBrain user."""
 
-    ADMIN = "admin"
-    USER = "user"
+    SUPERADMIN = "superadmin"
+    ADMIN      = "admin"
+    USER       = "user"
 
 
 class UserProfile(BaseModel):
@@ -25,10 +26,16 @@ class UserProfile(BaseModel):
 
 
 class UserBase(BaseModel):
-    """Shared user fields accepted by create and read operations."""
+    """Shared user fields accepted by create and read operations.
+
+    Columns match exactly the Supabase public.users schema:
+    id, email, full_name, username, avatar_url, role, created_at, updated_at.
+    """
 
     email: str | None = Field(default=None, min_length=3)
-    name: str | None = Field(default=None, min_length=1)
+    full_name: str | None = Field(default=None, min_length=1)
+    username: str | None = Field(default=None, min_length=1)
+    avatar_url: str | None = None
     role: UserRole = UserRole.USER
     profile: UserProfile | None = None
 
@@ -53,7 +60,9 @@ class UserUpdate(BaseModel):
     """Payload used to update mutable user fields."""
 
     email: str | None = Field(default=None, min_length=3)
-    name: str | None = Field(default=None, min_length=1)
+    full_name: str | None = Field(default=None, min_length=1)
+    username: str | None = Field(default=None, min_length=1)
+    avatar_url: str | None = None
     role: UserRole | None = None
     profile: UserProfile | None = None
 
@@ -73,7 +82,9 @@ class AuthUserIdentity(BaseModel):
 
     id: str = Field(min_length=1)
     email: str | None = Field(default=None, min_length=3)
-    name: str | None = Field(default=None, min_length=1)
+    full_name: str | None = Field(default=None, min_length=1)
+    username: str | None = None
+    avatar_url: str | None = None
     profile: UserProfile | None = None
 
     @field_validator("email")
@@ -95,4 +106,3 @@ class User(UserBase):
     id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
-

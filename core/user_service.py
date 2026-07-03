@@ -34,8 +34,8 @@ class UserService:
         """Create the service with an optional Supabase client override.
 
         When no client is provided, the service uses the server-side
-        service-role client. Phase 2.2 has no login/session layer yet, so
-        business operations must not depend on an authenticated end user.
+        service-role client. Business operations must not depend on an
+        authenticated end user.
         """
         self._client = client or get_supabase_admin_client()
 
@@ -139,11 +139,19 @@ class UserService:
         Supabase Auth is the source of truth for the user id and email.
         The application profile remains in the `users` table and is kept
         in sync when an authenticated request reaches the API.
+
+        Columns written: email, full_name, username, avatar_url.
+        The column `name` does not exist in the schema and is never sent.
         """
         identity = AuthUserIdentity.model_validate(auth_user)
-        display_name = identity.name
+        display_name = identity.full_name
         if not display_name and identity.profile:
             display_name = identity.profile.full_name
+
+        # Derive username from email when OAuth provider doesn't supply one
+        username = identity.username
+        if not username and identity.email:
+            username = identity.email.split("@")[0]
 
         try:
             existing_user = self.get_user(identity.id)
@@ -152,16 +160,21 @@ class UserService:
                 UserCreate(
                     id=identity.id,
                     email=identity.email,
-                    name=display_name,
-                    profile=identity.profile,
+                    full_name=display_name,
+                    username=username,
+                    avatar_url=identity.avatar_url,
                 )
             )
 
         updates: dict[str, Any] = {}
         if identity.email and identity.email != existing_user.email:
             updates["email"] = identity.email
-        if display_name and display_name != existing_user.name:
-            updates["name"] = display_name
+        if display_name and display_name != existing_user.full_name:
+            updates["full_name"] = display_name
+        if username and username != existing_user.username:
+            updates["username"] = username
+        if identity.avatar_url and identity.avatar_url != existing_user.avatar_url:
+            updates["avatar_url"] = identity.avatar_url
 
         if not updates:
             return existing_user
@@ -169,11 +182,13 @@ class UserService:
 
     @staticmethod
     def _payload_for_write(model: UserCreate | UserUpdate, *, exclude_unset: bool = False) -> dict[str, Any]:
-        """Convert a user model into a conservative Supabase payload."""
+        """Convert a user model into a conservative Supabase payload.
+
+        The `profile` field is a Python-only DTO — it has no matching SQL column
+        and must be stripped before any INSERT or UPDATE.
+        """
         payload = model.model_dump(mode="json", exclude_none=True, exclude_unset=exclude_unset)
-        profile = payload.pop("profile", None)
-        if profile and not payload.get("name") and profile.get("full_name"):
-            payload["name"] = profile["full_name"]
+        payload.pop("profile", None)
         return payload
 
     @staticmethod
@@ -196,9 +211,5 @@ class UserService:
 
     @staticmethod
     def _to_user(row: dict[str, Any]) -> User:
-        """Normalize common database field names into the public User model."""
-        normalized = dict(row)
-        if not normalized.get("name"):
-            normalized["name"] = normalized.get("full_name") or normalized.get("display_name")
-        return User.model_validate(normalized)
-
+        """Normalize a Supabase row into the public User model."""
+        return User.model_validate(row)

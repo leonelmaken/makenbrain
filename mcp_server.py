@@ -3,7 +3,11 @@ import random
 import urllib.parse
 from pathlib import Path
 from mcp.server.fastmcp import FastMCP
-from duckduckgo_search import DDGS
+# `ddgs` = successeur officiel de `duckduckgo_search` (paquet renommé)
+try:
+    from ddgs import DDGS
+except ImportError:
+    from duckduckgo_search import DDGS
 
 # Imports locaux
 from core.graph import neuron_graph
@@ -127,7 +131,6 @@ async def explore_concept(concept: str, depth: int = 1) -> str:
 # --- OUTILS DE CRÉATION ---
 
 import re
-from duckduckgo_search import DDGS
 
 # --- OUTILS DE CRÉATION AVANCÉE ---
 

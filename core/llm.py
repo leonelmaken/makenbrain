@@ -1,5 +1,6 @@
 import ollama
 from core.config import settings
+from core.system_prompts import SYSTEM_PROMPT  # générique par défaut — jamais de données personnelles
 
 # Client Ollama
 _client = ollama.Client(host=settings.OLLAMA_HOST)
@@ -10,30 +11,23 @@ def reload_client() -> None:
     global _client
     _client = ollama.Client(host=settings.OLLAMA_HOST)
 
-SYSTEM_PROMPT = """Tu es MakenBrain, le cerveau numérique personnel de MAKEN (Leonel Maken), ingénieur full-stack basé à Yaoundé.
 
-Ton rôle :
-- Raisonner à partir des souvenirs de ta mémoire personnelle
-- Faire des connexions intelligentes entre les concepts
-- Proposer des solutions calculées et concrètes
-- Apprendre et évoluer à chaque échange
-
-Comportement :
-- Si des souvenirs pertinents sont fournis, utilise-les en priorité
-- Réponds de façon directe, structurée et actionnable
-- Tu peux répondre en français ou en anglais selon la question
-- Tu t'exprimes toujours à la première personne comme un cerveau qui pense
-"""
-
-
-async def generate(prompt: str, context: str = "", system_prompt: str = None, stream: bool = False):
+async def generate(
+    prompt: str,
+    context: str = "",
+    system_prompt: str = None,
+    stream: bool = False,
+    history: list[dict] | None = None,
+):
     """
     Génère une réponse en utilisant le LLM local Ollama.
     Si un contexte mémoire est fourni, il est injecté (RAG).
+    `history` : messages précédents de la conversation ({role, content}),
+    injectés avant le message courant pour donner le fil au modèle.
     Supporte le streaming si stream=True.
     """
     messages = []
-    
+
     # Utiliser le prompt système fourni ou le prompt par défaut
     current_system = system_prompt or SYSTEM_PROMPT
 
@@ -51,6 +45,9 @@ async def generate(prompt: str, context: str = "", system_prompt: str = None, st
             "content": "Compris. J'ai intégré ces souvenirs dans mon raisonnement.",
         })
 
+    if history:
+        messages.extend(history)
+
     messages.append({"role": "user", "content": prompt})
 
     try:
@@ -59,7 +56,7 @@ async def generate(prompt: str, context: str = "", system_prompt: str = None, st
             return _client.chat(
                 model=settings.OLLAMA_MODEL,
                 messages=[{"role": "system", "content": current_system}] + messages,
-                options={"temperature": 0.7, "num_predict": 1024},
+                options={"temperature": 0.7, "num_predict": 2048},
                 stream=True
             )
         else:
@@ -67,11 +64,11 @@ async def generate(prompt: str, context: str = "", system_prompt: str = None, st
             response = _client.chat(
                 model=settings.OLLAMA_MODEL,
                 messages=[{"role": "system", "content": current_system}] + messages,
-                options={"temperature": 0.7, "num_predict": 1024},
+                options={"temperature": 0.7, "num_predict": 2048},
             )
             return response.message.content
     except Exception as e:
-        err_msg = f"Désolé MAKEN, mon module local (Ollama) semble éteint. Peux-tu le lancer ou me demander d'utiliser Groq ? (Erreur: {e})"
+        err_msg = f"Le module local (Ollama) semble éteint. Relance-le ou utilise le provider cloud. (Erreur: {e})"
         if stream:
             async def err_gen(): yield {"message": {"content": err_msg}}
             return err_gen()

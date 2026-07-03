@@ -26,11 +26,9 @@ COMPLEX_KEYWORDS = {
     "implémenter", "conçois", "concevoir", "planifie", "planifier",
 }
 
-SYSTEM_PROMPT = """Tu es MakenBrain, le cerveau numérique de MAKEN (Leonel Maken), ingénieur full-stack à Yaoundé.
-Tu utilises toute ta puissance pour donner des réponses expertes, précises et directement actionnables.
-Tu parles en français sauf si la question est en anglais.
-Tu connais ses projets : SmartBudget Africa (fintech panafricaine), MakenBrain (ce cerveau numérique).
-Sois direct, structuré, sans remplissage."""
+# Prompt générique importé depuis la source unique — jamais de données
+# personnelles dans un prompt par défaut (voir core/system_prompts.py).
+from core.system_prompts import SYSTEM_PROMPT
 
 
 # ── Routage intelligent ───────────────────────────────────────────────────────
@@ -76,10 +74,13 @@ async def groq_generate(
     context: str = "",
     model: str = GROQ_MODEL,
     system_prompt: str = None,
-    stream: bool = False
+    stream: bool = False,
+    history: list[dict] | None = None,
 ):
     """
     Génère une réponse via Groq (Llama 3.3 70B).
+    `history` : messages précédents de la conversation ({role, content}),
+    injectés avant le message courant pour donner le fil au modèle.
     Supporte le streaming si stream=True.
     """
     try:
@@ -108,6 +109,9 @@ async def groq_generate(
             "content": "Compris, j'intègre ces souvenirs dans ma réponse."
         })
 
+    if history:
+        messages.extend(history)
+
     messages.append({"role": "user", "content": prompt})
 
     try:
@@ -117,7 +121,7 @@ async def groq_generate(
                 model=model,
                 messages=[{"role": "system", "content": current_system}] + messages,
                 temperature=0.7,
-                max_tokens=2048,
+                max_tokens=4096,
                 stream=True
             )
 
@@ -125,7 +129,7 @@ async def groq_generate(
             model=model,
             messages=[{"role": "system", "content": current_system}] + messages,
             temperature=0.7,
-            max_tokens=2048,
+            max_tokens=4096,
         )
         content = response.choices[0].message.content or ""
         audit_event(

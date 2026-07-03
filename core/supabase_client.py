@@ -14,10 +14,32 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 
+import httpx
 from supabase import Client, create_client
+from supabase.lib.client_options import SyncClientOptions
 
 from core.config import settings
 from core.exceptions import SupabaseConfigError
+
+
+def _build_http_client() -> httpx.Client:
+    """Client HTTP injecté dans Supabase — HTTP/1.1 forcé, connexions robustes.
+
+    Le client httpx par défaut de supabase-py active HTTP/2, qui provoque des
+    erreurs récurrentes sur réseau instable : ConnectionTerminated,
+    "Received pseudo-header in trailer", handshakes SSL expirés, codes h2
+    cryptiques (11, 13). HTTP/1.1 + timeouts explicites + keepalive court
+    (les connexions inactives > 30 s sont jetées au lieu d'être réutilisées
+    mortes) éliminent ces familles d'erreurs à la racine.
+    """
+    # connect=20s : les handshakes SSL peuvent être très lents sur ce réseau
+    # (observé en conditions réelles) — un timeout court transformait une
+    # connexion lente mais viable en erreur.
+    return httpx.Client(
+        http2=False,
+        timeout=httpx.Timeout(25.0, connect=20.0),
+        limits=httpx.Limits(max_keepalive_connections=5, keepalive_expiry=30.0),
+    )
 
 logger = logging.getLogger("makenbrain.supabase")
 
@@ -47,8 +69,12 @@ def get_supabase_client() -> Client:
             "Configuration Supabase incomplète : SUPABASE_URL et "
             "SUPABASE_ANON_KEY sont requis dans .env."
         )
-    logger.info("Initialisation du client Supabase (anon key).")
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_ANON_KEY)
+    logger.info("Initialisation du client Supabase (anon key, HTTP/1.1).")
+    return create_client(
+        settings.SUPABASE_URL,
+        settings.SUPABASE_ANON_KEY,
+        options=SyncClientOptions(httpx_client=_build_http_client()),
+    )
 
 
 @lru_cache(maxsize=1)
@@ -72,8 +98,12 @@ def get_supabase_admin_client() -> Client:
             "Configuration Supabase admin incomplète : SUPABASE_URL et "
             "SUPABASE_SERVICE_ROLE_KEY sont requis dans .env."
         )
-    logger.info("Initialisation du client Supabase (service role key).")
-    return create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_ROLE_KEY)
+    logger.info("Initialisation du client Supabase (service role key, HTTP/1.1).")
+    return create_client(
+        settings.SUPABASE_URL,
+        settings.SUPABASE_SERVICE_ROLE_KEY,
+        options=SyncClientOptions(httpx_client=_build_http_client()),
+    )
 
 
 def test_connection() -> dict[str, bool | str]:

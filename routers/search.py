@@ -98,7 +98,11 @@ Réponds UNIQUEMENT avec les requêtes, une par ligne, sans numérotation ni exp
     all_results = []
     for query in queries:
         try:
-            from duckduckgo_search import DDGS
+            # `ddgs` = successeur officiel de `duckduckgo_search` (renommé)
+            try:
+                from ddgs import DDGS
+            except ImportError:
+                from duckduckgo_search import DDGS
             with DDGS() as ddgs:
                 raw = list(ddgs.text(query, max_results=request.max_results_per_query))
             for r in raw:
@@ -132,7 +136,11 @@ Réponds UNIQUEMENT avec les requêtes, une par ligne, sans numérotation ni exp
 async def search_status():
     """Vérifie que DuckDuckGo est accessible."""
     try:
-        from duckduckgo_search import DDGS
+        # `ddgs` = successeur officiel de `duckduckgo_search` (renommé)
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
         with DDGS() as ddgs:
             test = list(ddgs.text("test", max_results=1))
         return {"status": "online", "engine": "DuckDuckGo", "api_key_required": False}

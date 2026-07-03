@@ -159,7 +159,7 @@ async def expert_chat(req: ExpertChatRequest):
     # 3. Prompt expert
     domain_str = f" expert en {req.domain}" if req.domain else " expert"
     system = (
-        f"Tu es MakenBrain, un assistant{domain_str} au service de MAKEN. "
+        f"Tu es MakenBrain, un assistant{domain_str}. "
         f"Tu réponds comme un expert humain : précis, factuel, pédagogue. "
         f"Tu cites des exemples concrets. Tu signales clairement ce que tu ne sais pas. "
         f"Tu es comme Perplexity : tu bases tes réponses sur des faits, pas des suppositions. "

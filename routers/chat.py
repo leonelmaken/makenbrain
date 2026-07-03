@@ -2,9 +2,13 @@
 Chat hybride — Mémoire + Graphe + LLM + Historique persistant.
 Auto-détection de domaine et auto-alimentation en arrière-plan.
 """
+import asyncio
 import json
 import logging
+import os
 import random
+
+import httpx
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from fastapi.responses import StreamingResponse
@@ -15,10 +19,11 @@ from core.llm import generate, check_ollama_status
 from core.memory import search_memory
 from core.providers import groq_generate, detect_provider
 from core.config import settings
-from core.chat_history import add_message, generate_smart_topic
+from core.chat_history import add_message, create_session, generate_smart_topic, get_session_for_user
 from core.auth import require_chat_user
 from core.consciousness import consciousness
-from models.user import User
+from core.system_prompts import build_system_prompt
+from models.user import User, UserRole
 
 router = APIRouter()
 logger = logging.getLogger("makenbrain.chat")
@@ -143,6 +148,8 @@ class ChatResponse(BaseModel):
     domain_detected: Optional[str] = None
     auto_learning: bool = False
     context_preview: Optional[list[str]] = None
+    web_sources: list[dict] = Field(default_factory=list)
+    web_images: list[dict] = Field(default_factory=list)
 
 
 async def _detect_domain_and_research(message: str) -> Optional[str]:
@@ -186,6 +193,358 @@ async def _detect_domain_and_research(message: str) -> Optional[str]:
 from core.user_profile import user_profile
 from core.project_memory import project_manager
 
+# Nombre de messages précédents injectés dans le contexte du modèle et
+# taille maximale de chaque message (protège la fenêtre de contexte).
+_HISTORY_MAX_MESSAGES = 10
+_HISTORY_MAX_CHARS_PER_MESSAGE = 2000
+
+
+# ── Recherche web ancrée (façon Perplexity) ──────────────────────────────────
+# Quand la question est factuelle ou d'actualité, une VRAIE recherche web est
+# faite en temps réel et injectée dans le contexte. Le modèle a l'interdiction
+# de citer autre chose que ces sources — fin des références inventées.
+_WEB_SEARCH_TRIGGERS = (
+    "actuel", "actualité", "aujourd'hui", "récent", "récente", "dernier", "dernière",
+    "2024", "2025", "2026", "source", "prouve", "preuve",
+    "statistique", "marché", "prix de", "combien coûte", "qui est", "c'est qui",
+    "news", "nouveauté", "tendance", "classement", "milliardaire", "vérifie",
+    "cherche", "recherche sur", "article", "investissement", "parle moi de",
+    "parle-moi de", "entreprise", "qui sont",
+)
+
+
+def _needs_web_search(message: str) -> bool:
+    """Heuristique rapide par mots-clés (chemin sans latence)."""
+    lowered = message.lower()
+    return any(trigger in lowered for trigger in _WEB_SEARCH_TRIGGERS)
+
+
+async def _classify_needs_web(message: str) -> bool:
+    """Détection intelligente du besoin de recherche web.
+
+    1. Mots-clés d'abord (0 latence). 2. Sinon, micro-classifieur LLM sur le
+    modèle rapide (~300 ms) : couvre toutes les formulations humaines que des
+    mots-clés ne peuvent pas prévoir. Défaut NON en cas d'échec.
+    """
+    if _needs_web_search(message):
+        return True
+    try:
+        from core.providers import groq_generate, GROQ_FAST
+
+        verdict = await asyncio.wait_for(
+            groq_generate(
+                f"Question : {message}\n\n"
+                "Cette question porte-t-elle sur des faits vérifiables, des personnes, "
+                "des entreprises, des événements réels ou des informations d'actualité "
+                "qui gagneraient à être appuyés par des sources web ? "
+                "Réponds UNIQUEMENT par OUI ou NON.",
+                "",
+                model=GROQ_FAST,
+                system_prompt="Tu es un classifieur binaire. Réponds uniquement OUI ou NON.",
+            ),
+            timeout=6,
+        )
+        return "OUI" in str(verdict).upper()
+    except Exception:
+        return False
+
+
+async def _expand_queries(message: str) -> list[str]:
+    """Génère 2 requêtes de recherche complémentaires (angles différents).
+
+    C'est ce qui transforme une recherche simple en recherche APPROFONDIE :
+    le sujet est couvert sous plusieurs angles au lieu d'une seule requête.
+    Best-effort : échec → aucune requête supplémentaire.
+    """
+    try:
+        from core.providers import groq_generate, GROQ_FAST
+
+        raw = await asyncio.wait_for(
+            groq_generate(
+                f"Sujet : {message[:300]}\n\n"
+                "Génère 2 requêtes de recherche web courtes et complémentaires "
+                "(angles différents : actualité récente, chiffres/faits, contexte) "
+                "pour documenter ce sujet en profondeur. Une par ligne, sans numérotation.",
+                "",
+                model=GROQ_FAST,
+                system_prompt="Tu génères des requêtes de recherche web. Réponds uniquement avec les requêtes, une par ligne.",
+            ),
+            timeout=8,
+        )
+        return [q.strip("-•* ").strip() for q in str(raw).strip().splitlines() if q.strip()][:2]
+    except Exception:
+        return []
+
+
+async def _deep_web_research(message: str) -> tuple[list[dict], list[dict]]:
+    """Recherche approfondie : requête originale + requêtes complémentaires,
+    toutes lancées en PARALLÈLE sur tous les moteurs (DDGS + Wikipédia).
+
+    Résultat : jusqu'à 10 sources uniques et 8 images — la matière d'une
+    réponse structurée et citée, pas d'un simple chat.
+    """
+    queries = [message[:200]] + await _expand_queries(message)
+    results = await asyncio.gather(*[_web_search_sources(q) for q in queries])
+    sources: list[dict] = []
+    images: list[dict] = []
+    seen_urls: set[str] = set()
+    seen_imgs: set[str] = set()
+    for source_list, image_list in results:
+        for s in source_list:
+            if s["url"] not in seen_urls:
+                seen_urls.add(s["url"])
+                sources.append(s)
+        for img in image_list:
+            if img["thumbnail"] not in seen_imgs:
+                seen_imgs.add(img["thumbnail"])
+                images.append(img)
+    return sources[:10], images[:8]
+
+
+async def _ddgs_search(
+    query: str,
+    max_results: int = 5,
+    with_images: bool = True,
+) -> tuple[list[dict], list[dict]]:
+    """Recherche DuckDuckGo/multi-moteurs via `ddgs`. Best-effort."""
+    def _search() -> tuple[list[dict], list[dict]]:
+        # `ddgs` est le successeur officiel de `duckduckgo_search` (renommé) :
+        # l'ancien paquet retourne des résultats vides et des rate-limits.
+        try:
+            from ddgs import DDGS
+        except ImportError:
+            from duckduckgo_search import DDGS
+
+        sources: list[dict] = []
+        images: list[dict] = []
+        with DDGS(timeout=10) as ddgs:
+            for r in ddgs.text(query, max_results=max_results):
+                url = r.get("href") or r.get("url") or ""
+                if not url:
+                    continue
+                sources.append({
+                    "title": r.get("title", "") or url,
+                    "url": url,
+                    "snippet": (r.get("body", "") or "")[:300],
+                })
+            if with_images and sources:
+                try:
+                    for img in ddgs.images(query, max_results=4):
+                        if img.get("thumbnail"):
+                            images.append({
+                                "title": img.get("title", ""),
+                                "thumbnail": img.get("thumbnail", ""),
+                                "image": img.get("image", ""),
+                                "url": img.get("url", ""),
+                            })
+                except Exception:
+                    pass  # les images sont un bonus, jamais bloquantes
+        return sources, images
+
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_search), timeout=25)
+    except Exception as exc:
+        logger.warning("DDGS indisponible pour le grounding : %s: %s", type(exc).__name__, exc)
+        return [], []
+
+
+async def _wikipedia_search(query: str, limit: int = 4) -> tuple[list[dict], list[dict]]:
+    """Recherche Wikipédia (API gratuite, CDN mondial — fiable sur réseau lent).
+
+    Retourne des sources encyclopédiques avec extraits, URLs canoniques et
+    vignettes d'images officielles. Essaie le français puis l'anglais.
+    """
+    params = {
+        "action": "query", "format": "json", "generator": "search",
+        "gsrsearch": query, "gsrlimit": limit,
+        "prop": "pageimages|extracts|info", "inprop": "url",
+        "piprop": "thumbnail", "pithumbsize": 320,
+        "exintro": 1, "explaintext": 1, "exchars": 300,
+        "redirects": 1,
+    }
+    sources: list[dict] = []
+    images: list[dict] = []
+    headers = {"User-Agent": "MakenBrain/1.0 (https://github.com/leonelmaken/makenbrain)"}
+    try:
+        async with httpx.AsyncClient(timeout=12, headers=headers, follow_redirects=True) as client:
+            for lang in ("fr", "en"):
+                # Chaque langue est isolée : une erreur sur le français
+                # (proxy FAI qui renvoie du HTML, timeout…) ne doit jamais
+                # empêcher la tentative en anglais.
+                try:
+                    resp = await client.get(f"https://{lang}.wikipedia.org/w/api.php", params=params)
+                    if resp.status_code != 200:
+                        logger.warning("Wikipedia %s → HTTP %s", lang, resp.status_code)
+                        continue
+                    try:
+                        data = resp.json()
+                    except Exception:
+                        # Réponse non-JSON = interception proxy/page d'erreur HTML.
+                        logger.warning("Wikipedia %s → réponse non-JSON (proxy/interception ?)", lang)
+                        continue
+                    pages = ((data.get("query") or {}).get("pages") or {})
+                    ranked = sorted(pages.values(), key=lambda p: p.get("index", 99))
+                    for p in ranked:
+                        title = p.get("title", "")
+                        url = p.get("fullurl") or f"https://{lang}.wikipedia.org/wiki/{title.replace(' ', '_')}"
+                        sources.append({
+                            "title": f"{title} — Wikipédia",
+                            "url": url,
+                            "snippet": (p.get("extract") or "")[:300],
+                        })
+                        thumb = (p.get("thumbnail") or {}).get("source")
+                        if thumb:
+                            images.append({"title": title, "thumbnail": thumb, "image": thumb, "url": url})
+                    if sources:
+                        break  # cette langue a répondu — inutile de continuer
+                except Exception as exc:
+                    logger.warning("Wikipedia %s indisponible : %s: %s", lang, type(exc).__name__, exc)
+    except Exception as exc:
+        logger.warning("Wikipedia indisponible pour le grounding : %s: %s", type(exc).__name__, exc)
+    return sources, images
+
+
+async def _brave_search(query: str, max_results: int = 5) -> tuple[list[dict], list[dict]]:
+    """Brave Search API — 2 000 requêtes/mois gratuites (clé BRAVE_API_KEY dans .env).
+
+    Excellente qualité d'actualité, infrastructure indépendante — précieux
+    quand DuckDuckGo est bloqué ou lent sur le réseau local.
+    """
+    key = os.getenv("BRAVE_API_KEY", "")
+    if not key:
+        return [], []
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            resp = await client.get(
+                "https://api.search.brave.com/res/v1/web/search",
+                params={"q": query, "count": max_results},
+                headers={"X-Subscription-Token": key, "Accept": "application/json"},
+            )
+            if resp.status_code != 200:
+                logger.warning("Brave Search → HTTP %s", resp.status_code)
+                return [], []
+            results = ((resp.json().get("web") or {}).get("results") or [])
+            sources = [
+                {
+                    "title": r.get("title", "") or r.get("url", ""),
+                    "url": r.get("url", ""),
+                    "snippet": (r.get("description", "") or "")[:300],
+                }
+                for r in results if r.get("url")
+            ]
+            return sources, []
+    except Exception as exc:
+        logger.warning("Brave indisponible : %s: %s", type(exc).__name__, exc)
+        return [], []
+
+
+async def _tavily_search(query: str, max_results: int = 5) -> tuple[list[dict], list[dict]]:
+    """Tavily API — 1 000 requêtes/mois gratuites (clé TAVILY_API_KEY dans .env).
+
+    Moteur conçu pour les IA : résultats pré-nettoyés + images liées au sujet.
+    """
+    key = os.getenv("TAVILY_API_KEY", "")
+    if not key:
+        return [], []
+    try:
+        async with httpx.AsyncClient(timeout=12) as client:
+            resp = await client.post(
+                "https://api.tavily.com/search",
+                json={
+                    "api_key": key, "query": query,
+                    "max_results": max_results, "include_images": True,
+                },
+            )
+            if resp.status_code != 200:
+                logger.warning("Tavily → HTTP %s", resp.status_code)
+                return [], []
+            data = resp.json()
+            sources = [
+                {
+                    "title": r.get("title", "") or r.get("url", ""),
+                    "url": r.get("url", ""),
+                    "snippet": (r.get("content", "") or "")[:300],
+                }
+                for r in data.get("results", []) if r.get("url")
+            ]
+            images = [
+                {"title": "", "thumbnail": u, "image": u, "url": u}
+                for u in (data.get("images") or [])[:4] if isinstance(u, str)
+            ]
+            return sources, images
+    except Exception as exc:
+        logger.warning("Tavily indisponible : %s: %s", type(exc).__name__, exc)
+        return [], []
+
+
+async def _web_search_sources(
+    query: str,
+    max_results: int = 5,
+    with_images: bool = True,
+) -> tuple[list[dict], list[dict]]:
+    """Grounding multi-moteurs : Brave + Tavily + DuckDuckGo + Wikipédia en PARALLÈLE.
+
+    Chaque moteur est best-effort et indépendant : il suffit qu'UN SEUL
+    réponde pour que le chat ait des preuves. Brave et Tavily ne s'activent
+    que si leur clé gratuite est présente dans .env. Priorité de fusion :
+    Brave/Tavily (qualité), DuckDuckGo (couverture), Wikipédia (fiabilité
+    + images officielles).
+    """
+    results = await asyncio.gather(
+        _brave_search(query, max_results),
+        _tavily_search(query, max_results),
+        _ddgs_search(query, max_results, with_images),
+        _wikipedia_search(query),
+    )
+    sources: list[dict] = []
+    images: list[dict] = []
+    seen_urls: set[str] = set()
+    for source_list, image_list in results:
+        for s in source_list:
+            if s["url"] and s["url"] not in seen_urls:
+                seen_urls.add(s["url"])
+                sources.append(s)
+        images.extend(image_list)
+    if not sources:
+        logger.warning("Grounding sans résultat : tous les moteurs indisponibles.")
+    return sources[:7], images[:6]
+
+
+_GROUNDING_RULES = (
+    "\n\nSOURCES WEB : des résultats de recherche web RÉELS et ACTUELS te sont "
+    "fournis dans le contexte. Règles STRICTES :\n"
+    "- Appuie chaque affirmation factuelle sur ces sources en les citant par numéro : [1], [2]…\n"
+    "- Ne mentionne JAMAIS un article, un titre, une étude ou une URL absents de cette liste.\n"
+    "- Si les sources fournies ne suffisent pas pour répondre, dis-le explicitement au lieu d'inventer.\n"
+    "- Structure ta réponse en markdown : titres (##), listes, tableau comparatif si pertinent. "
+    "Produis une synthèse APPROFONDIE et organisée, pas un résumé superficiel."
+)
+
+
+def _build_conversation_history(session_id: str | None, user_id: str) -> list[dict]:
+    """Construit l'historique de conversation pour le LLM.
+
+    Retourne les derniers messages de la session (rôle user/assistant),
+    uniquement si la session appartient bien à l'utilisateur courant.
+    Best-effort : toute erreur retourne un historique vide sans casser le chat.
+    """
+    if not session_id:
+        return []
+    try:
+        session = get_session_for_user(session_id, user_id)
+        if not session:
+            return []
+        history: list[dict] = []
+        for message in session.get("messages", [])[-_HISTORY_MAX_MESSAGES:]:
+            role = message.get("role")
+            content = str(message.get("content", ""))
+            if role not in ("user", "assistant") or not content:
+                continue
+            history.append({"role": role, "content": content[:_HISTORY_MAX_CHARS_PER_MESSAGE]})
+        return history
+    except Exception:
+        return []
+
 @router.post("/", response_model=ChatResponse)
 async def chat(
     request: ChatRequest,
@@ -195,6 +554,14 @@ async def chat(
     """
     Chat intelligent avec mémoire persistante, contexte utilisateur et projets.
     """
+    # ── Session auto-créée si absente ────────────────────────────────────────
+    # Sans session, rien n'était persisté (pas d'historique, pas de titre).
+    # Chaque conversation est désormais rattachée à une session dès le
+    # premier message, comme sur ChatGPT/Claude. Le frontend récupère
+    # l'identifiant via ChatResponse.session_id.
+    if not request.session_id:
+        request.session_id = create_session(user_id=str(current_user.id))
+
     # ── Fast Conversation Layer ──────────────────────────────────────────────
     fast = _fast_reply(request.message)
     if fast is not None:
@@ -215,11 +582,14 @@ async def chat(
 
     context_parts, memories_used, graph_concepts, context_preview = [], 0, [], []
 
-    # 1. INJECTION DU PROFIL UTILISATEUR & PROJETS (Phase 1)
-    user_summary = user_profile.get_summary()
-    projects_summary = project_manager.get_projects_summary()
-    context_parts.append(f"--- IDENTITÉ UTILISATEUR ---\n{user_summary}")
-    context_parts.append(f"--- CONTEXTE PROJETS ---\n{projects_summary}")
+    # 1. INJECTION DU PROFIL UTILISATEUR & PROJETS — SuperAdmin uniquement
+    # Le profil et les projets locaux appartiennent au SuperAdmin.
+    # Les autres utilisateurs n'ont accès qu'à leur mémoire personnelle (ci-dessous).
+    if current_user.role == UserRole.SUPERADMIN:
+        user_summary = user_profile.get_summary()
+        projects_summary = project_manager.get_projects_summary()
+        context_parts.append(f"--- IDENTITÉ UTILISATEUR ---\n{user_summary}")
+        context_parts.append(f"--- CONTEXTE PROJETS ---\n{projects_summary}")
 
     # 1.b. INJECTION MEMOIRE UTILISATEUR PERSONNALISEE
     user_memory_context = consciousness.get_user_memory_context(
@@ -269,8 +639,48 @@ async def chat(
         except Exception:
             pass
 
+    # ── RECHERCHE WEB APPROFONDIE (sources réelles, façon Perplexity) ────────
+    web_sources: list[dict] = []
+    web_images: list[dict] = []
+    web_attempted = await _classify_needs_web(request.message)
+    if web_attempted:
+        web_sources, web_images = await _deep_web_research(request.message)
+        if web_sources:
+            source_lines = []
+            for i, s in enumerate(web_sources, start=1):
+                source_lines.append(f"[{i}] {s['title']}\n    URL : {s['url']}\n    Extrait : {s['snippet']}")
+            context_parts.append(
+                "--- SOURCES WEB (recherche temps réel — SEULES sources citables) ---\n"
+                + "\n".join(source_lines)
+            )
+
     context = "\n\n".join(context_parts)
     chosen  = detect_provider(request.message, request.provider)
+    # Prompt système construit dynamiquement selon le rôle :
+    # SuperAdmin → prompt personnel ; tout autre utilisateur → prompt générique.
+    system_prompt = build_system_prompt(current_user.role)
+    if web_sources:
+        system_prompt += _GROUNDING_RULES
+    elif web_attempted:
+        # La recherche a été tentée mais AUCUN moteur n'a répondu (réseau).
+        # Sans cette règle, le modèle fabrique une section "Sources" avec des
+        # URLs plausibles mais inventées dès que l'utilisateur insiste.
+        system_prompt += (
+            "\n\nRECHERCHE WEB ÉCHOUÉE : la recherche de sources n'a rien retourné "
+            "(problème réseau temporaire). Tu n'as donc AUCUNE source vérifiable. "
+            "INTERDICTION ABSOLUE de produire une section Sources, des références, "
+            "des URLs ou des citations [n] — même si l'utilisateur en demande. "
+            "Réponds avec tes connaissances générales, indique clairement au début "
+            "que les sources n'ont pas pu être récupérées cette fois, et propose "
+            "de reposer la question dans quelques minutes."
+        )
+
+    # ── Mémoire conversationnelle ────────────────────────────────────────────
+    # Injecte les derniers échanges de la session pour que le modèle ait le
+    # fil de la conversation (comme ChatGPT/Claude). Les messages sont
+    # sauvegardés APRÈS génération : l'historique ne contient donc que les
+    # tours précédents, jamais le message courant.
+    conversation_history = _build_conversation_history(request.session_id, str(current_user.id))
 
     # DÉTECTION DOMAINE (Arrière-plan)
     background_tasks.add_task(_detect_domain_and_research, request.message)
@@ -286,16 +696,24 @@ async def chat(
                 user_memory_count,
                 memories_used,
                 len(graph_concepts),
+                system_prompt,
+                conversation_history,
             ),
             media_type="text/event-stream"
         )
 
     # MODE NORMAL (Non-streaming)
     if chosen == "groq":
-        response_text = await groq_generate(request.message, context)
+        response_text = await groq_generate(
+            request.message, context,
+            system_prompt=system_prompt, history=conversation_history,
+        )
         model_name    = "llama-3.3-70b-versatile (Groq)"
     else:
-        response_text = await generate(request.message, context)
+        response_text = await generate(
+            request.message, context,
+            system_prompt=system_prompt, history=conversation_history,
+        )
         model_name    = settings.OLLAMA_MODEL + " (local)"
 
     response_evaluation = consciousness.evaluate_response(
@@ -308,10 +726,16 @@ async def chat(
     )
     response_text = response_evaluation["answer"]
 
-    # Sauvegarder dans l'historique de conversation
+    # Sauvegarder dans l'historique de conversation (sources incluses pour
+    # que les preuves soient ré-affichées au rechargement de la session)
     if request.session_id:
         add_message(request.session_id, "user", request.message, str(current_user.id))
-        add_message(request.session_id, "assistant", response_text, str(current_user.id))
+        assistant_extras = (
+            {"web_sources": web_sources, "web_images": web_images}
+            if (web_sources or web_images) else None
+        )
+        add_message(request.session_id, "assistant", response_text, str(current_user.id),
+                    extras=assistant_extras)
         background_tasks.add_task(generate_smart_topic, request.session_id)
 
     return ChatResponse(
@@ -326,6 +750,8 @@ async def chat(
         session_id      = request.session_id,
         auto_learning   = True,
         context_preview = context_preview if context_preview else None,
+        web_sources     = web_sources,
+        web_images      = web_images,
     )
 
 
@@ -338,19 +764,23 @@ async def chat_streamer(
     user_memory_count: int,
     memories_used: int,
     graph_context_count: int,
+    system_prompt: str | None = None,
+    conversation_history: list[dict] | None = None,
 ):
     """Générateur SSE pour le streaming token-par-token."""
     full_response = ""
-    
+
     if chosen == "groq":
-        stream = await groq_generate(request.message, context, stream=True)
+        stream = await groq_generate(request.message, context, system_prompt=system_prompt,
+                                     history=conversation_history, stream=True)
         for chunk in stream:
             token = chunk.choices[0].delta.content or ""
             if token:
                 full_response += token
                 yield f"data: {json.dumps({'token': token})}\n\n"
     else:
-        stream = await generate(request.message, context, stream=True)
+        stream = await generate(request.message, context, system_prompt=system_prompt,
+                                history=conversation_history, stream=True)
         for chunk in stream:
             token = chunk['message']['content']
             full_response += token

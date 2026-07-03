@@ -35,7 +35,7 @@ class ReasoningAgent(BaseAgent):
         "Agent de raisonnement expert qui orchestre le pipeline Phase 3.1→3.5 "
         "(QuestionAnalyzer → HypothesisEngine → EvidenceEngine → "
         "DecisionEngine → Synthesizer) pour produire des réponses analytiques "
-        "fondées sur la mémoire personnelle de MAKEN."
+        "fondées sur la mémoire personnelle de l'utilisateur."
     )
     capabilities        : list[str]     = ["reasoning", "qa", "analysis", "general"]
     autonomy            : AgentAutonomy = AgentAutonomy.READ_ONLY

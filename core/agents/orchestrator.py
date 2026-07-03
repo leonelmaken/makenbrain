@@ -22,6 +22,7 @@ Phase 5 vs Phase 6+ :
 """
 from __future__ import annotations
 
+import asyncio
 import time
 import uuid
 
@@ -88,16 +89,19 @@ class BrainOrchestrator:
         if plan.is_empty:
             return self._no_agent_report(task, request_id, t_start)
 
-        # ── Exécution séquentielle (Phase 5) ─────────────────────────────────
+        # ── Exécution parallèle (Phase 8) ────────────────────────────────────
+        for group in plan.parallel_groups:
+            group_results = await asyncio.gather(
+                *[self._run_agent(agent, task, ctx) for agent in group],
+                return_exceptions=False,
+            )
+            for result in group_results:
+                ctx.add_result(result)
+
+        # ── Exécution séquentielle (chaîne de dépendances) ───────────────────
         for agent in plan.sequential:
             result = await self._run_agent(agent, task, ctx)
             ctx.add_result(result)
-
-            # Arrêter la séquence dès qu'un agent réussit
-            # (comportement pipeline — chaque agent enrichit le contexte)
-            # Pour la Phase 6, ce comportement sera configurable par plan.
-            if result.success:
-                break
 
         # ── Agrégation ────────────────────────────────────────────────────────
         total_ms = round((time.monotonic() - t_start) * 1000, 1)
@@ -168,19 +172,29 @@ class BrainOrchestrator:
         ctx       : ExecutionContext,
         total_ms  : float,
     ) -> ExecutionReport:
-        """Construit le rapport final à partir des résultats accumulés."""
+        """Construit le rapport final enrichi (Phase 8)."""
         successful = [r for r in ctx.results if r.success]
         failed     = [r for r in ctx.results if not r.success]
 
         if successful:
-            status       = "success"
-            final_output = ctx.last_successful_output
-        elif failed:
-            status       = "failed"
-            final_output = None
+            status = "success"
         else:
-            status       = "failed"
-            final_output = None
+            status = "failed"
+
+        final_output = self._merge_outputs(ctx.results)
+
+        confidences    = [r.confidence for r in ctx.results if r.confidence is not None]
+        global_conf    = round(sum(confidences) / len(confidences), 3) if confidences else None
+
+        metadata: dict = {
+            "task_type"        : task.type,
+            "task_priority"    : task.priority,
+            "successful_agents": [r.agent_name for r in successful],
+            "failed_agents"    : [r.agent_name for r in failed],
+            "per_agent_ms"     : {r.agent_name: r.duration_ms for r in ctx.results},
+        }
+        if global_conf is not None:
+            metadata["global_confidence"] = global_conf
 
         return ExecutionReport(
             request_id       = request_id,
@@ -190,11 +204,24 @@ class BrainOrchestrator:
             agents_used      = [r.agent_name for r in ctx.results],
             total_duration_ms= total_ms,
             results          = list(ctx.results),
-            metadata         = {
-                "task_type"    : task.type,
-                "task_priority": task.priority,
-            },
+            metadata         = metadata,
         )
+
+    def _merge_outputs(self, results: list[AgentResult]) -> str | None:
+        """Fusionne les sorties de plusieurs agents réussis.
+
+        Un seul agent → retourne son output directement.
+        Plusieurs agents → trie par confiance décroissante et concatène
+        avec attribution pour que l'appelant puisse distinguer les sources.
+        """
+        successful = [r for r in results if r.success and r.output]
+        if not successful:
+            return None
+        if len(successful) == 1:
+            return successful[0].output
+        ranked = sorted(successful, key=lambda r: r.confidence or 0.0, reverse=True)
+        parts  = [f"[{r.agent_name}]\n{r.output}" for r in ranked]
+        return "\n\n---\n\n".join(parts)
 
     def _no_agent_report(
         self,

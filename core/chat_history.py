@@ -59,24 +59,28 @@ def _quick_topic(first_message: str) -> str:
     return topic[:60] + ("..." if len(words) > 6 else "")
 
 
-def create_session() -> str:
+def create_session(user_id: str = "") -> str:
     """Cree une nouvelle session de chat.
 
     Parametres:
-        Aucun.
+        user_id: Propriétaire de la session. Optionnel pour la compatibilité
+                 avec les appels existants, mais requis pour l'isolation.
     Retour:
         Identifiant court de la session creee.
     """
     sessions = _load()
     session_id = str(uuid.uuid4())[:8]
     now = datetime.now().isoformat()
-    sessions[session_id] = {
+    entry: dict = {
         "id": session_id,
         "topic": "Nouvelle conversation",
         "created_at": now,
         "updated_at": now,
         "messages": [],
     }
+    if user_id:
+        entry["user_id"] = user_id
+    sessions[session_id] = entry
     _save(sessions)
     return session_id
 
@@ -86,6 +90,7 @@ def add_message(
     role: str,
     content: str,
     user_id: str,
+    extras: dict[str, Any] | None = None,
 ) -> None:
     """Ajoute un message utilisateur-scope a une session.
 
@@ -117,14 +122,17 @@ def add_message(
     if not _ensure_session_user(session, user_id):
         return
 
-    session["messages"].append(
-        {
-            "role": role,
-            "content": content,
-            "user_id": user_id,
-            "timestamp": datetime.now().isoformat(),
-        }
-    )
+    message: dict[str, Any] = {
+        "role": role,
+        "content": content,
+        "user_id": user_id,
+        "timestamp": datetime.now().isoformat(),
+    }
+    # extras : données jointes au message (ex. web_sources/web_images du
+    # grounding) — persistées pour être ré-affichées au rechargement.
+    if extras:
+        message.update(extras)
+    session["messages"].append(message)
     session["updated_at"] = datetime.now().isoformat()
 
     if role == "user" and session["topic"] == "Nouvelle conversation":
@@ -148,17 +156,22 @@ def get_session(session_id: str) -> Optional[dict[str, Any]]:
     return sessions.get(session_id)
 
 
-def list_sessions(limit: int = 30) -> list[dict[str, Any]]:
+def list_sessions(user_id: str | None = None, limit: int = 30) -> list[dict[str, Any]]:
     """Liste les sessions les plus recentes.
 
     Parametres:
+        user_id: Si fourni, retourne uniquement les sessions de cet utilisateur.
+                 Si None, retourne toutes les sessions (usage interne/admin).
         limit: Nombre maximal de sessions retournees.
     Retour:
         Liste compacte des sessions pour affichage ou navigation.
     """
     sessions = _load()
+    candidates = sessions.values()
+    if user_id is not None:
+        candidates = [s for s in candidates if s.get("user_id") == user_id]
     items = sorted(
-        sessions.values(),
+        candidates,
         key=lambda session: session["updated_at"],
         reverse=True,
     )
@@ -173,6 +186,24 @@ def list_sessions(limit: int = 30) -> list[dict[str, Any]]:
         }
         for session in items[:limit]
     ]
+
+
+def get_session_for_user(session_id: str, user_id: str) -> Optional[dict[str, Any]]:
+    """Retourne une session uniquement si elle appartient à user_id.
+
+    Parametres:
+        session_id: Identifiant de la session.
+        user_id: Propriétaire attendu.
+    Retour:
+        Session si la propriété est vérifiée, None sinon.
+    """
+    session = get_session(session_id)
+    if session is None:
+        return None
+    owner = session.get("user_id")
+    if owner and str(owner) != str(user_id):
+        return None  # appartient à un autre utilisateur
+    return session
 
 
 def delete_session(session_id: str) -> bool:
@@ -220,6 +251,10 @@ async def generate_smart_topic(session_id: str) -> Optional[str]:
     session = get_session(session_id)
     if not session or len(session["messages"]) < 2:
         return None
+    # Un titre intelligent n'est genere qu'une seule fois par session :
+    # le titre reste stable et on evite un appel LLM a chaque message.
+    if session.get("smart_topic_done"):
+        return None
     try:
         from core.providers import groq_generate
 
@@ -232,10 +267,13 @@ async def generate_smart_topic(session_id: str) -> Optional[str]:
         )
         title = await groq_generate(prompt, "")
         title = title.strip().strip('"').strip("'")[:60]
+        if not title:
+            return None
 
         sessions = _load()
         if session_id in sessions:
             sessions[session_id]["topic"] = title
+            sessions[session_id]["smart_topic_done"] = True
             _save(sessions)
         return title
     except Exception:
