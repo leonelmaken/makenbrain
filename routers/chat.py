@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import random
+import urllib.parse
 
 import httpx
 
@@ -151,6 +152,9 @@ class ChatResponse(BaseModel):
     context_preview: Optional[list[str]] = None
     web_sources: list[dict] = Field(default_factory=list)
     web_images: list[dict] = Field(default_factory=list)
+    generated_images: list[dict] = Field(default_factory=list)
+    image_suggestions: list[str] = Field(default_factory=list)
+    image_request: Optional[str] = None
 
 
 async def _detect_domain_and_research(message: str) -> Optional[str]:
@@ -198,6 +202,95 @@ from core.project_memory import project_manager
 # taille maximale de chaque message (protège la fenêtre de contexte).
 _HISTORY_MAX_MESSAGES = 10
 _HISTORY_MAX_CHARS_PER_MESSAGE = 2000
+
+
+# ── Génération d'images (Pollinations — gratuit, sans clé) ───────────────────
+# L'URL Pollinations EST l'image : elle est générée à la volée (FLUX) au
+# moment où le navigateur la charge. Zéro coût, zéro clé API, zéro stockage.
+_IMAGE_TRIGGERS = (
+    "génère une image", "genere une image", "génère-moi une image",
+    "genere-moi une image", "génère moi une image", "genere moi une image",
+    "crée une image", "cree une image", "crée-moi une image",
+    "dessine", "fais une image", "fais-moi une image", "illustre",
+    "image réaliste", "image realiste", "génère un logo", "genere un logo",
+    "crée un logo", "cree un logo", "generate an image", "draw me",
+)
+
+
+def _needs_image_generation(message: str) -> bool:
+    lowered = message.lower()
+    return any(t in lowered for t in _IMAGE_TRIGGERS)
+
+
+async def _generate_images(message: str, count: int = 2) -> list[dict]:
+    """Construit des URLs d'images générées par Pollinations (FLUX).
+
+    Le prompt est traduit/enrichi en anglais par le modèle rapide (les
+    générateurs d'images comprennent bien mieux l'anglais descriptif).
+    Best-effort : si l'enrichissement échoue, le message brut sert de prompt.
+    """
+    prompt_en = message
+    try:
+        from core.providers import groq_generate, GROQ_FAST
+
+        raw = await asyncio.wait_for(
+            groq_generate(
+                f"Demande utilisateur : {message}\n\n"
+                "Transforme cette demande en UN prompt d'image en ANGLAIS de "
+                "qualité professionnelle : sujet précis, style, éclairage, "
+                "composition, et TOUJOURS des qualificatifs de rendu "
+                "(photorealistic, highly detailed, professional photography, "
+                "8k — sauf si le style demandé est dessin/cartoon/logo, adapte). "
+                "70 mots maximum. Réponds UNIQUEMENT avec le prompt.",
+                "",
+                model=GROQ_FAST,
+                system_prompt="Tu écris des prompts experts pour générateurs d'images. Réponds uniquement le prompt, en anglais.",
+            ),
+            timeout=8,
+        )
+        if raw and str(raw).strip():
+            prompt_en = str(raw).strip().strip('"')
+    except Exception:
+        pass
+
+    images: list[dict] = []
+    encoded = urllib.parse.quote(prompt_en[:400])
+    for _ in range(max(1, count)):
+        seed = random.randint(1, 1_000_000)
+        images.append({
+            # enhance=true : Pollinations ré-enrichit le prompt côté serveur
+            # pour un rendu plus propre et plus détaillé.
+            "url": (f"https://image.pollinations.ai/prompt/{encoded}"
+                    f"?width=1024&height=1024&nologo=true&enhance=true&seed={seed}"),
+            "prompt": prompt_en,
+            "seed": seed,
+        })
+    return images
+
+
+async def _image_improvement_suggestions(message: str) -> list[str]:
+    """Propose 3 pistes d'amélioration de l'image (affichées en chips cliquables).
+
+    Best-effort : échec → aucune suggestion, jamais bloquant.
+    """
+    try:
+        from core.providers import groq_generate, GROQ_FAST
+
+        raw = await asyncio.wait_for(
+            groq_generate(
+                f"Un utilisateur vient de générer une image : {message}\n\n"
+                "Propose 3 variantes d'amélioration COURTES en FRANÇAIS "
+                "(éclairage, style, cadrage, ambiance…), chacune sous forme "
+                "d'instruction de 4 à 8 mots. Une par ligne, sans numérotation.",
+                "",
+                model=GROQ_FAST,
+                system_prompt="Tu es directeur artistique. Réponds uniquement les 3 instructions, une par ligne.",
+            ),
+            timeout=8,
+        )
+        return [s.strip("-•* ").strip() for s in str(raw).strip().splitlines() if s.strip()][:3]
+    except Exception:
+        return []
 
 
 # ── Recherche web ancrée (façon Perplexity) ──────────────────────────────────
@@ -584,6 +677,41 @@ async def chat(
             model="fast-reply",
             provider="local",
             session_id=request.session_id,
+        )
+
+    # ── GÉNÉRATION D'IMAGES (Pollinations — gratuit) ─────────────────────────
+    if _needs_image_generation(request.message):
+        # Images et suggestions d'amélioration générées EN PARALLÈLE.
+        gen_images, suggestions = await asyncio.gather(
+            _generate_images(request.message),
+            _image_improvement_suggestions(request.message),
+        )
+        reply = (
+            "Voici tes images générées — clique dessus pour les agrandir. "
+            "Tu peux aussi cliquer sur une de mes suggestions ci-dessous "
+            "pour créer une variante améliorée."
+        )
+        extras = {
+            "generated_images": gen_images,
+            "image_suggestions": suggestions,
+            "image_request": request.message,
+        }
+        if request.session_id:
+            add_message(request.session_id, "user", request.message, str(current_user.id))
+            add_message(request.session_id, "assistant", reply, str(current_user.id), extras=extras)
+            background_tasks.add_task(generate_smart_topic, request.session_id)
+        return ChatResponse(
+            response=reply,
+            confidence=1.0,
+            risk_level="low",
+            memories_used=0,
+            graph_concepts=[],
+            model="pollinations-flux",
+            provider="pollinations",
+            session_id=request.session_id,
+            generated_images=gen_images,
+            image_suggestions=suggestions,
+            image_request=request.message,
         )
 
     context_parts, memories_used, graph_concepts, context_preview = [], 0, [], []

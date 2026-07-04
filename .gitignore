@@ -8,6 +8,11 @@ __pycache__/
 venv/
 ENV/
 
+# Caches de tests
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Données du cerveau (locales uniquement)
 brain_data/
 
