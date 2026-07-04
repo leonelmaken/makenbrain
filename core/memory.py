@@ -29,10 +29,22 @@ async def init_memory() -> None:
     )
 
     embed_start = time.monotonic()
-    ef = embedding_functions.SentenceTransformerEmbeddingFunction(
-        model_name=settings.EMBED_MODEL
-    )
-    print(f"[STARTUP]   modèle d'embedding '{settings.EMBED_MODEL}' chargé en {time.monotonic() - embed_start:.1f}s.")
+    # Chargement HORS-LIGNE d'abord : une fois le modèle en cache local
+    # (~/.cache/huggingface), aucune requête réseau vers Hugging Face.
+    # Sans ça, chaque démarrage revalidait le modèle en ligne — jusqu'à
+    # 4+ minutes sur réseau lent. Repli en ligne uniquement au tout
+    # premier lancement (modèle pas encore téléchargé).
+    try:
+        ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=settings.EMBED_MODEL, local_files_only=True
+        )
+        print(f"[STARTUP]   modèle d'embedding '{settings.EMBED_MODEL}' chargé depuis le cache local en {time.monotonic() - embed_start:.1f}s.")
+    except Exception:
+        print("[STARTUP]   modèle absent du cache local — téléchargement depuis Hugging Face…")
+        ef = embedding_functions.SentenceTransformerEmbeddingFunction(
+            model_name=settings.EMBED_MODEL
+        )
+        print(f"[STARTUP]   modèle d'embedding '{settings.EMBED_MODEL}' téléchargé et chargé en {time.monotonic() - embed_start:.1f}s.")
 
     _collection = _chroma_client.get_or_create_collection(
         name=settings.COLLECTION_NAME,

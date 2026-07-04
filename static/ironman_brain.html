@@ -471,6 +471,53 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
   object-fit:cover; transition:.15s;
 }
 .sources-images a:hover img { border-color:var(--accent); transform:scale(1.04); }
+
+/* ── STATISTIQUES SUPERADMIN (Phase 9) ────────────────────── */
+.stats-cards { display:grid; grid-template-columns:repeat(2, 1fr); gap:8px; margin-bottom:12px; }
+.stat-card {
+  background:rgba(255,255,255,.04); border:1px solid var(--border);
+  border-radius:10px; padding:10px 12px; display:flex; flex-direction:column; gap:2px;
+}
+.stat-value { font-size:18px; color:var(--text-bright); font-weight:600; }
+.stat-label { font-size:9px; letter-spacing:1.5px; color:var(--text-dim); text-transform:uppercase; }
+.stats-chart {
+  display:flex; align-items:flex-end; gap:6px; height:72px;
+  padding:6px 2px 0; margin-bottom:14px;
+}
+.stats-bar-wrap {
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  gap:4px; height:100%; justify-content:flex-end;
+}
+.stats-bar {
+  width:100%; min-height:2px; border-radius:3px 3px 0 0;
+  background:linear-gradient(180deg, var(--accent), rgba(45,226,201,.2));
+}
+.stats-bar-label { font-size:8px; color:var(--text-dim); }
+
+/* ── PLANS & TARIFS (SuperAdmin — vente de tokens) ────────── */
+.plan-row {
+  display:grid; grid-template-columns:1fr 74px 74px 44px;
+  gap:6px; align-items:center; margin-bottom:6px;
+}
+.plan-head span { font-size:8px; letter-spacing:1.5px; color:var(--text-dim); text-transform:uppercase; }
+.plan-name { font-size:11.5px; color:var(--text-bright); }
+.plan-input {
+  background:rgba(255,255,255,.05); border:1px solid var(--border);
+  border-radius:7px; color:var(--text-bright); padding:5px 7px;
+  font-size:11px; font-family:inherit; outline:none; width:100%;
+}
+.plan-input:focus { border-color:rgba(45,226,201,.4); }
+.plan-input::placeholder { color:var(--text-dim); }
+.plan-save {
+  background:rgba(45,226,201,.12); border:1px solid rgba(45,226,201,.3);
+  color:var(--accent); border-radius:7px; padding:5px 6px;
+  cursor:pointer; font-size:10px; font-family:inherit; transition:.15s;
+}
+.plan-save:hover { background:rgba(45,226,201,.22); }
+.plan-assign {
+  display:grid; grid-template-columns:1fr 90px 74px;
+  gap:6px; margin:10px 0 14px;
+}
 #auth-avatar { width:20px; height:20px; border-radius:50%;
   border:1px solid var(--border); background:var(--bg-elevated); object-fit:cover; }
 #auth-logout-btn {
@@ -552,6 +599,15 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
         <span id="admin-version" style="color:var(--text-dim);font-size:9px"></span>
       </div>
       <div id="health-status-row"></div>
+
+      <!-- Statistiques d'utilisation (Phase 9) -->
+      <div class="sidebar-label mono" style="margin:14px 0 8px">Statistiques (7 jours)</div>
+      <div id="admin-stats"><div class="hist-empty">Chargement…</div></div>
+
+      <!-- Plans & tarifs — vente de tokens gérée par le SuperAdmin (Phase 9) -->
+      <div class="sidebar-label mono" style="margin:14px 0 8px">Plans &amp; tarifs</div>
+      <div id="admin-plans"><div class="hist-empty">Chargement…</div></div>
+
       <div class="sidebar-label mono" style="margin-bottom:10px">Agents enregistrés</div>
       <div id="agents-grid"></div>
       <button id="admin-logout-sheet" class="mono" onclick="logoutAdmin()">Déconnecter Super Admin</button>
@@ -644,7 +700,12 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css">
 <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
 <script>
-const API = 'http://localhost:8000';
+// URL du backend dérivée de l'origine de la page : fonctionne en local
+// (localhost:8000) ET en production (futur domaine) sans toucher au code.
+// Repli localhost uniquement si la page est ouverte en fichier direct.
+const API = window.location.origin.startsWith('http')
+  ? window.location.origin
+  : 'http://localhost:8000';
 
 /* [DIAG] Journal d'exécution temporaire — à supprimer après résolution */
 const MBLOG = (tag, msg) => console.log(`[${tag}] +${(performance.now() / 1000).toFixed(3)}s ${msg}`);
@@ -948,10 +1009,15 @@ document.addEventListener('keydown', (e) => {
 
 async function loadAdminPanel() {
   try {
-    const [health, agents] = await Promise.all([
+    const [health, agents, stats, plans] = await Promise.all([
       fetch(`${API}/health/full`).then(r => r.json()).catch(() => null),
       fetch(`${API}/agents/registry`).then(r => r.json()).catch(() => null),
+      fetch(`${API}/admin/stats`, { headers: getHeaders({}) }).then(r => r.ok ? r.json() : null).catch(() => null),
+      fetch(`${API}/admin/plans`, { headers: getHeaders({}) }).then(r => r.ok ? r.json() : null).catch(() => null),
     ]);
+
+    renderAdminStats(stats);
+    renderAdminPlans(plans);
 
     const statusRow = document.getElementById('health-status-row');
     if (health) {
@@ -977,6 +1043,136 @@ async function loadAdminPanel() {
       }).join('');
     }
   } catch (e) {}
+}
+
+function renderAdminStats(stats) {
+  // Tableau de bord chiffré du SuperAdmin : cartes + barres 7 jours.
+  // Construction DOM sécurisée (textContent) — aucune donnée injectée en HTML.
+  const el = document.getElementById('admin-stats');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!stats || !stats.usage) {
+    el.innerHTML = '<div class="hist-empty">Statistiques indisponibles</div>';
+    return;
+  }
+  const u = stats.usage;
+
+  const cards = document.createElement('div');
+  cards.className = 'stats-cards';
+  const defs = [
+    [stats.users ? stats.users.total : '—', 'Inscrits'],
+    [u.active_users_today, "Actifs aujourd'hui"],
+    [u.messages_total, `Messages / ${u.days}j`],
+    [stats.history ? stats.history.sessions_total : '—', 'Conversations'],
+  ];
+  defs.forEach(([value, label]) => {
+    const card = document.createElement('div');
+    card.className = 'stat-card';
+    const v = document.createElement('span');
+    v.className = 'stat-value'; v.textContent = value;
+    const l = document.createElement('span');
+    l.className = 'stat-label'; l.textContent = label;
+    card.appendChild(v); card.appendChild(l);
+    cards.appendChild(card);
+  });
+  el.appendChild(cards);
+
+  const chart = document.createElement('div');
+  chart.className = 'stats-chart';
+  const maxMsg = Math.max(...u.series.map(d => d.messages), 1);
+  u.series.forEach(d => {
+    const wrap = document.createElement('div');
+    wrap.className = 'stats-bar-wrap';
+    wrap.title = `${d.date} — ${d.messages} message(s), ${d.users} utilisateur(s)`;
+    const bar = document.createElement('div');
+    bar.className = 'stats-bar';
+    bar.style.height = `${Math.max(Math.round(d.messages / maxMsg * 100), 3)}%`;
+    const label = document.createElement('span');
+    label.className = 'stats-bar-label'; label.textContent = d.date.slice(8);
+    wrap.appendChild(bar); wrap.appendChild(label);
+    chart.appendChild(wrap);
+  });
+  el.appendChild(chart);
+}
+
+function renderAdminPlans(data) {
+  // Gestion des plans (limite journalière + prix $) et attribution d'un plan
+  // à un utilisateur — la vente de tokens pilotée par le SuperAdmin.
+  const el = document.getElementById('admin-plans');
+  if (!el) return;
+  el.innerHTML = '';
+  if (!data || !data.plans) {
+    el.innerHTML = '<div class="hist-empty">Plans indisponibles</div>';
+    return;
+  }
+
+  // En-tête des colonnes
+  const head = document.createElement('div');
+  head.className = 'plan-row plan-head mono';
+  ['Plan', 'Msg/jour', '$ /mois', ''].forEach(t => {
+    const s = document.createElement('span');
+    s.textContent = t;
+    head.appendChild(s);
+  });
+  el.appendChild(head);
+
+  Object.entries(data.plans).forEach(([name, cfg]) => {
+    const row = document.createElement('div');
+    row.className = 'plan-row';
+    const title = document.createElement('span');
+    title.className = 'plan-name mono';
+    title.textContent = name;
+    const msg = document.createElement('input');
+    msg.className = 'plan-input'; msg.type = 'number'; msg.min = '0';
+    msg.value = cfg.daily_messages ?? ''; msg.placeholder = '∞';
+    msg.title = 'Messages par jour (vide = illimité)';
+    const price = document.createElement('input');
+    price.className = 'plan-input'; price.type = 'number'; price.min = '0'; price.step = '0.5';
+    price.value = cfg.price_usd ?? ''; price.placeholder = '—';
+    price.title = 'Prix mensuel en dollars';
+    const save = document.createElement('button');
+    save.className = 'plan-save mono'; save.textContent = 'OK';
+    save.onclick = async () => {
+      const body = {};
+      if (msg.value !== '') body.daily_messages = parseInt(msg.value, 10);
+      if (price.value !== '') body.price_usd = parseFloat(price.value);
+      const r = await fetch(`${API}/admin/plans/${encodeURIComponent(name)}`, {
+        method: 'PUT', headers: getHeaders(), body: JSON.stringify(body),
+      }).catch(() => null);
+      save.textContent = (r && r.ok) ? '✓' : '✗';
+      setTimeout(() => { save.textContent = 'OK'; }, 1600);
+    };
+    row.appendChild(title); row.appendChild(msg); row.appendChild(price); row.appendChild(save);
+    el.appendChild(row);
+  });
+
+  // Attribution d'un plan à un utilisateur (après une vente, par exemple)
+  const assign = document.createElement('div');
+  assign.className = 'plan-assign';
+  const uid = document.createElement('input');
+  uid.className = 'plan-input plan-uid';
+  uid.placeholder = 'user_id (Supabase)';
+  const sel = document.createElement('select');
+  sel.className = 'plan-input plan-select';
+  Object.keys(data.plans).forEach(p => {
+    const o = document.createElement('option');
+    o.value = p; o.textContent = p;
+    sel.appendChild(o);
+  });
+  const btn = document.createElement('button');
+  btn.className = 'plan-save mono'; btn.textContent = 'Attribuer';
+  btn.onclick = async () => {
+    const id = uid.value.trim();
+    if (!id) return;
+    const r = await fetch(`${API}/admin/users/${encodeURIComponent(id)}/plan`, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify({ plan: sel.value }),
+    }).catch(() => null);
+    btn.textContent = (r && r.ok) ? '✓ Attribué' : '✗ Échec';
+    setTimeout(() => { btn.textContent = 'Attribuer'; }, 1800);
+    if (r && r.ok) uid.value = '';
+  };
+  assign.appendChild(uid); assign.appendChild(sel); assign.appendChild(btn);
+  el.appendChild(assign);
 }
 
 /* ── HEALTH POLLING ── */
@@ -1387,6 +1583,13 @@ async function send(requestedByVoice = false) {
         body: JSON.stringify({ message: val, session_id: currentSession, use_memory: true }),
         signal: abortController.signal,
       });
+      if (res.status === 429) {
+        // Quota journalier du plan atteint — message clair, pas d'erreur brute.
+        const err = await res.json().catch(() => ({}));
+        stopThinking();
+        addMsg(err.detail || 'Quota journalier atteint — réessaie demain.', true);
+        return;
+      }
       const data = await res.json();
       if (data.session_id) {
         currentSession = data.session_id;
@@ -1593,6 +1796,15 @@ async function loadSession(id) {
   startChatUI();
   try {
     const r = await fetch(`${API}/history/${id}`, { headers: getHeaders({}) });
+    if (r.status === 404 || r.status === 403) {
+      // Session inexistante ou appartenant à un autre compte : purger la
+      // référence locale pour ne plus la redemander à chaque chargement.
+      currentSession = null;
+      localStorage.removeItem('mb_session');
+      chat.classList.remove('active');
+      welcome.classList.remove('hide');
+      return;
+    }
     const d = await r.json();
     d.messages.forEach(m => {
       addMsg(m.content, m.role !== 'user');

@@ -144,6 +144,21 @@ def add_message(
         _store_recent_user_memory_best_effort(session)
 
 
+def history_stats() -> dict[str, Any]:
+    """Statistiques globales de l'historique (tableau de bord SuperAdmin).
+
+    Uniquement des compteurs agrégés — aucun contenu de conversation.
+    """
+    sessions = _load()
+    total_messages = sum(len(s.get("messages", [])) for s in sessions.values())
+    owners = {str(s.get("user_id")) for s in sessions.values() if s.get("user_id")}
+    return {
+        "sessions_total": len(sessions),
+        "messages_total": total_messages,
+        "distinct_owners": len(owners),
+    }
+
+
 def get_session(session_id: str) -> Optional[dict[str, Any]]:
     """Retourne une session de conversation par identifiant.
 

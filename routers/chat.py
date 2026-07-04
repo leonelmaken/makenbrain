@@ -23,6 +23,7 @@ from core.chat_history import add_message, create_session, generate_smart_topic,
 from core.auth import require_chat_user
 from core.consciousness import consciousness
 from core.system_prompts import build_system_prompt
+from core.usage import enforce_quota
 from models.user import User, UserRole
 
 router = APIRouter()
@@ -554,6 +555,11 @@ async def chat(
     """
     Chat intelligent avec mémoire persistante, contexte utilisateur et projets.
     """
+    # ── Quota par utilisateur (Phase 9) ──────────────────────────────────────
+    # Comptabilise le message et refuse (429) au-delà de la limite du plan.
+    # SuperAdmin/Admin : illimité. Users : plan free.
+    enforce_quota(current_user)
+
     # ── Session auto-créée si absente ────────────────────────────────────────
     # Sans session, rien n'était persisté (pas d'historique, pas de titre).
     # Chaque conversation est désormais rattachée à une session dès le

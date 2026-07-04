@@ -10,8 +10,11 @@ not configured, protected endpoints refuse access instead of staying open.
 """
 from __future__ import annotations
 
+import hashlib
 import hmac
 import logging
+import threading
+import time
 from typing import Any
 
 from fastapi import Depends, HTTPException, Security
@@ -48,6 +51,48 @@ logger = logging.getLogger("makenbrain.auth")
 
 _api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 _bearer_auth = HTTPBearer(auto_error=False)
+
+# ── Cache de validation de token ──────────────────────────────────────────────
+# Chaque requête authentifiée revalidait le JWT auprès de Supabase (réseau).
+# Sur réseau instable, cela transformait CHAQUE requête en pari — d'où les
+# rafales de 503. Un token validé avec succès est réutilisé :
+#   - < 5 min  : sans aucune revalidation réseau (frais) ;
+#   - < 30 min : uniquement si Supabase est injoignable (stale-while-error).
+# Compromis de sécurité assumé : une session révoquée côté serveur peut
+# rester utilisable jusqu'à 5 min (30 min pendant une panne Supabase).
+# Le logout local purge le token du navigateur — plus aucune requête ne le
+# porte. Les tokens sont indexés par empreinte SHA-256, jamais en clair.
+_TOKEN_CACHE_TTL_FRESH = 300.0
+_TOKEN_CACHE_TTL_STALE = 1800.0
+_TOKEN_CACHE_MAX = 500
+_token_cache: dict[str, tuple[float, User]] = {}
+_token_cache_lock = threading.Lock()
+
+
+def _token_cache_key(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _token_cache_get(token: str, max_age: float) -> User | None:
+    key = _token_cache_key(token)
+    with _token_cache_lock:
+        entry = _token_cache.get(key)
+    if entry and (time.monotonic() - entry[0]) <= max_age:
+        return entry[1].model_copy(deep=True)
+    return None
+
+
+def _token_cache_put(token: str, user: User) -> None:
+    with _token_cache_lock:
+        if len(_token_cache) >= _TOKEN_CACHE_MAX:
+            oldest = min(_token_cache, key=lambda k: _token_cache[k][0])
+            _token_cache.pop(oldest, None)
+        _token_cache[_token_cache_key(token)] = (time.monotonic(), user.model_copy(deep=True))
+
+
+def _token_cache_drop(token: str) -> None:
+    with _token_cache_lock:
+        _token_cache.pop(_token_cache_key(token), None)
 
 
 def require_api_key(api_key: str | None = Security(_api_key_header)) -> str:
@@ -99,6 +144,11 @@ def require_supabase_user(
         )
         raise HTTPException(status_code=401, detail="Token Supabase manquant (Authorization: Bearer).")
 
+    # ── Cache frais : token validé il y a < 5 min → aucun appel réseau ──────
+    cached = _token_cache_get(credentials.credentials, _TOKEN_CACHE_TTL_FRESH)
+    if cached is not None:
+        return cached
+
     # Deux familles d'échec distinctes :
     # - le token est réellement rejeté par Supabase          → 401 (auth refusée)
     # - erreur réseau/transport vers Supabase (HTTP/2 fermé,
@@ -112,6 +162,7 @@ def require_supabase_user(
             auth_response = get_supabase_admin_client().auth.get_user(credentials.credentials)
             break
         except _TOKEN_REJECTED_ERRORS as exc:
+            _token_cache_drop(credentials.credentials)
             audit_event(
                 action="auth.denied",
                 tool="auth",
@@ -127,8 +178,13 @@ def require_supabase_user(
             )
 
     if auth_response is None:
-        # Le token n'a pas pu être évalué : indisponibilité temporaire, pas
-        # un refus d'authentification. Ne surtout pas répondre 401.
+        # Supabase injoignable. Avant de répondre 503 : servir la session
+        # depuis le cache stale (validée il y a < 30 min) — l'application
+        # reste utilisable pendant les coupures réseau vers Supabase.
+        stale = _token_cache_get(credentials.credentials, _TOKEN_CACHE_TTL_STALE)
+        if stale is not None:
+            logger.warning("Supabase Auth injoignable — session servie depuis le cache (stale).")
+            return stale
         raise HTTPException(
             status_code=503,
             detail="Service d'authentification momentanement indisponible. Reessayez.",
@@ -138,17 +194,29 @@ def require_supabase_user(
     if auth_user is None:
         raise HTTPException(status_code=401, detail="Token Supabase invalide ou expire.")
 
+    identity = _auth_identity_from_supabase_user(auth_user)
     try:
-        user = UserService().sync_auth_user(_auth_identity_from_supabase_user(auth_user))
+        user = UserService().sync_auth_user(identity)
     except (UserServiceError, ValueError, SupabaseConfigError) as exc:
-        logger.exception("Synchronisation utilisateur Auth/Profile echouee.")
-        raise HTTPException(status_code=500, detail=f"Synchronisation utilisateur impossible : {exc}") from exc
+        # Le token est VALIDE (Supabase vient de le confirmer) : un échec de
+        # synchronisation du profil (réseau vers la table users) ne doit pas
+        # bloquer la requête. Profil minimal dérivé du JWT — le rôle vient
+        # de app_metadata ci-dessous, l'autorisation n'est pas affaiblie.
+        logger.warning("Sync profil indisponible — profil derive du JWT : %s", exc)
+        user = User(
+            id=identity.id,
+            email=identity.email,
+            full_name=identity.full_name,
+            avatar_url=identity.avatar_url,
+            role=UserRole.USER,
+        )
 
     # Priorité au rôle encodé dans app_metadata (inviolable côté client).
     role = _extract_role_from_auth_user(auth_user)
     if role is not None:
         user.role = role
 
+    _token_cache_put(credentials.credentials, user)
     return user
 
 

@@ -1,0 +1,37 @@
+# ═══════════════════════════════════════════════════════════════════
+# MakenBrain — dépendances Python (Phase 9 : fondations SaaS)
+# Installation : pip install -r requirements.txt
+# Versions figées sur l'environnement de développement validé.
+# ═══════════════════════════════════════════════════════════════════
+
+# ── API & serveur ────────────────────────────────────────────────────
+fastapi==0.136.3
+uvicorn==0.49.0
+python-multipart==0.0.32          # upload de fichiers (ingestion)
+
+# ── Modèles & validation ─────────────────────────────────────────────
+pydantic==2.13.4
+pydantic-settings==2.14.1
+python-dotenv==1.2.2
+
+# ── Auth & base de données (Supabase) ────────────────────────────────
+supabase==2.31.0
+httpx==0.28.1                     # client HTTP (forcé HTTP/1.1 — voir core/supabase_client.py)
+
+# ── LLM providers ────────────────────────────────────────────────────
+ollama==0.6.2                     # modèle local
+groq==1.4.0                       # Llama 3.3 70B cloud (gratuit)
+
+# ── Mémoire vectorielle & graphe ─────────────────────────────────────
+chromadb==1.5.9
+sentence-transformers==5.5.1
+networkx==3.6.1
+numpy==2.4.6
+
+# ── Recherche web (grounding multi-moteurs) ──────────────────────────
+ddgs==9.14.4                      # successeur officiel de duckduckgo_search
+beautifulsoup4==4.15.0            # extraction de texte des pages
+aiohttp==3.14.1                   # agent de recherche Phase 7
+
+# ── MCP (serveur d'outils) ───────────────────────────────────────────
+mcp==1.27.2
