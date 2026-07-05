@@ -293,6 +293,79 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 #new-chat-btn { width:100%; margin-top:18px; padding:13px; display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(45,226,201,.08); border:0.5px solid rgba(45,226,201,.35); border-radius:13px; color:var(--accent); font-weight:500; font-size:13px; letter-spacing:.5px; cursor:pointer; transition:.2s; }
 #new-chat-btn:hover { background:rgba(45,226,201,.14); }
 
+#open-memory-btn { width:100%; margin-top:10px; padding:11px; display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(255,255,255,.03); border:0.5px solid var(--border); border-radius:13px; color:var(--text); font-size:12.5px; letter-spacing:.3px; cursor:pointer; transition:.2s; }
+#open-memory-btn:hover { background:rgba(255,255,255,.06); border-color:var(--border-soft); color:var(--text-bright); }
+#open-memory-btn svg { color:var(--accent); flex-shrink:0; }
+
+/* ── MODALE MÉMOIRE PERSONNELLE ── */
+#memory-modal {
+  position:fixed; inset:0; z-index:200000; background:rgba(2,3,10,.88);
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(28px);
+}
+#memory-modal.open { display:flex; }
+#memory-box {
+  width:min(520px,90vw); max-height:84vh; display:flex; flex-direction:column;
+  background:var(--bg-elevated); border:0.5px solid rgba(45,226,201,.25);
+  border-radius:20px; padding:26px; box-shadow:0 30px 80px rgba(0,0,0,.7), 0 0 40px rgba(45,226,201,.06);
+}
+.memory-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.memory-title {
+  font-size:10px; letter-spacing:3px; color:var(--accent); text-transform:uppercase;
+  display:flex; align-items:center; gap:8px;
+}
+.memory-title::before { content:''; width:5px; height:5px; border-radius:50%; background:var(--accent); box-shadow:0 0 8px var(--accent); }
+#memory-close { background:none; border:none; color:var(--text-dim); cursor:pointer; padding:4px; }
+#memory-close:hover { color:var(--text-bright); }
+.memory-desc { font-size:12px; color:var(--text-dim); margin-bottom:16px; line-height:1.6; }
+
+#memory-add-form { display:flex; gap:8px; margin-bottom:16px; }
+#memory-add-input {
+  flex:1; padding:10px 13px; background:rgba(255,255,255,.04); border:0.5px solid var(--border);
+  border-radius:10px; color:var(--text-bright); font-family:inherit; font-size:12.5px;
+  outline:none; transition:.2s; resize:none;
+}
+#memory-add-input:focus { border-color:rgba(45,226,201,.4); background:rgba(45,226,201,.03); }
+#memory-add-btn {
+  padding:0 16px; border:0.5px solid rgba(45,226,201,.3); border-radius:10px;
+  background:rgba(45,226,201,.1); color:var(--accent); cursor:pointer; font-size:12px;
+  font-family:inherit; transition:.2s; white-space:nowrap;
+}
+#memory-add-btn:hover { background:rgba(45,226,201,.18); }
+#memory-add-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+#memory-list { overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:2px; }
+.memory-card {
+  background:rgba(255,255,255,.025); border:0.5px solid var(--border); border-radius:12px;
+  padding:12px 13px;
+}
+.memory-card-text {
+  font-size:12.5px; color:var(--text); line-height:1.55; white-space:pre-wrap; word-break:break-word;
+}
+.memory-card-edit {
+  width:100%; background:rgba(255,255,255,.05); border:0.5px solid rgba(45,226,201,.35);
+  border-radius:8px; color:var(--text-bright); font-family:inherit; font-size:12.5px;
+  padding:8px 10px; resize:vertical; outline:none; min-height:60px;
+}
+.memory-card-meta {
+  display:flex; align-items:center; justify-content:space-between; margin-top:8px;
+}
+.memory-card-badge {
+  font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--text-dim);
+  background:rgba(255,255,255,.04); border-radius:6px; padding:2px 8px;
+}
+.memory-card-actions { display:flex; gap:6px; }
+.memory-card-actions button {
+  background:none; border:none; color:var(--text-dim); cursor:pointer; padding:3px;
+  display:flex; transition:.15s;
+}
+.memory-card-actions button:hover { color:var(--accent); }
+.memory-card-actions button.memory-delete-btn:hover { color:#ff6b6b; }
+.memory-empty, .memory-loading, .memory-error {
+  text-align:center; padding:32px 12px; color:var(--text-dim); font-size:12.5px; line-height:1.6;
+}
+.memory-error { color:#ff9494; }
+
 #history-list { margin-top:18px; display:flex; flex-direction:column; gap:6px; }
 .hist-item { display:flex; align-items:center; justify-content:space-between; padding:12px 14px; border-radius:11px; cursor:pointer; font-size:13px; background:rgba(255,255,255,.02); border:0.5px solid transparent; transition:.2s; color:var(--text); }
 .hist-item:hover { background:rgba(255,255,255,.05); border-color:var(--border-soft); }
@@ -328,15 +401,60 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 .agent-row {
   display:flex; align-items:center; justify-content:space-between; padding:8px 10px;
   background:rgba(255,255,255,.02); border:0.5px solid var(--border-soft); border-radius:9px;
-  font-size:11.5px; transition:.15s;
+  font-size:11.5px; transition:.15s; cursor:pointer;
 }
-.agent-row:hover { background:rgba(255,255,255,.04); }
+.agent-row:hover { background:rgba(255,255,255,.04); border-color:rgba(45,226,201,.3); }
 .agent-name { color:var(--text-bright); font-family:'JetBrains Mono',monospace; }
 .agent-autonomy { font-size:9px; letter-spacing:1px; text-transform:uppercase; padding:3px 7px; border-radius:999px; }
-.autonomy-suggest   { color:var(--accent); background:rgba(45,226,201,.08); border:0.5px solid rgba(45,226,201,.2); }
-.autonomy-sandboxed { color:#ffa53c; background:rgba(255,165,60,.08); border:0.5px solid rgba(255,165,60,.2); }
-.autonomy-readonly  { color:var(--text-dim); background:rgba(255,255,255,.04); border:0.5px solid var(--border-soft); }
-.autonomy-stub      { color:#ff5c5c; background:rgba(255,92,92,.06); border:0.5px solid rgba(255,92,92,.2); }
+.autonomy-suggest    { color:var(--accent); background:rgba(45,226,201,.08); border:0.5px solid rgba(45,226,201,.2); }
+.autonomy-sandboxed  { color:#ffa53c; background:rgba(255,165,60,.08); border:0.5px solid rgba(255,165,60,.2); }
+.autonomy-readonly   { color:var(--text-dim); background:rgba(255,255,255,.04); border:0.5px solid var(--border-soft); }
+.autonomy-stub       { color:#ff5c5c; background:rgba(255,92,92,.06); border:0.5px solid rgba(255,92,92,.2); }
+.autonomy-autonomous { color:#ff9f4a; background:rgba(255,120,40,.1); border:0.5px solid rgba(255,120,40,.3); }
+
+/* ── SALLE DES AGENTS (Phase 10 — SuperAdmin) ─────────────── */
+#agent-room-modal {
+  position:fixed; inset:0; z-index:200000; background:rgba(2,3,10,.88);
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(28px);
+}
+#agent-room-modal.open { display:flex; }
+#agent-room-box {
+  width:min(560px,90vw); max-height:86vh; display:flex; flex-direction:column;
+  background:var(--bg-elevated); border:0.5px solid rgba(255,159,74,.25);
+  border-radius:20px; padding:26px; box-shadow:0 30px 80px rgba(0,0,0,.7), 0 0 40px rgba(255,159,74,.06);
+}
+.agent-room-badges { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:14px; }
+.agent-cap-chip {
+  font-size:9px; letter-spacing:.5px; color:var(--text-dim); text-transform:uppercase;
+  background:rgba(255,255,255,.04); border:0.5px solid var(--border-soft); border-radius:999px;
+  padding:3px 9px;
+}
+#agent-room-log {
+  flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;
+  margin-bottom:14px; padding-right:2px; min-height:120px; max-height:46vh;
+}
+.agent-room-msg {
+  font-size:12.5px; line-height:1.55; padding:9px 13px; border-radius:12px; max-width:88%;
+  white-space:pre-wrap; word-break:break-word;
+}
+.agent-room-msg.user  { align-self:flex-end; background:rgba(45,226,201,.1); color:var(--text-bright); border:0.5px solid rgba(45,226,201,.2); }
+.agent-room-msg.agent { align-self:flex-start; background:rgba(255,255,255,.03); color:var(--text); border:0.5px solid var(--border); }
+.agent-room-msg.pending { color:var(--text-dim); font-style:italic; }
+#agent-room-form { display:flex; gap:8px; }
+#agent-room-input {
+  flex:1; padding:10px 13px; background:rgba(255,255,255,.04); border:0.5px solid var(--border);
+  border-radius:10px; color:var(--text-bright); font-family:inherit; font-size:12.5px;
+  outline:none; transition:.2s; resize:none;
+}
+#agent-room-input:focus { border-color:rgba(255,159,74,.4); background:rgba(255,159,74,.03); }
+#agent-room-send {
+  padding:0 16px; border:0.5px solid rgba(255,159,74,.3); border-radius:10px;
+  background:rgba(255,159,74,.1); color:#ff9f4a; cursor:pointer; font-size:12px;
+  font-family:inherit; transition:.2s; white-space:nowrap;
+}
+#agent-room-send:hover { background:rgba(255,159,74,.18); }
+#agent-room-send:disabled { opacity:.4; cursor:not-allowed; }
 
 #admin-logout-sheet {
   width:100%; margin-top:12px; padding:10px; border:none; border-radius:9px;
@@ -654,6 +772,47 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
   </div>
 </div>
 
+<!-- Modale mémoire personnelle — "ce que MakenBrain sait de toi" -->
+<div id="memory-modal">
+  <div id="memory-box">
+    <div class="memory-header">
+      <div class="memory-title mono">CE QUE MAKENBRAIN SAIT DE TOI</div>
+      <button id="memory-close" onclick="closeMemoryModal()" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="memory-desc">Ces souvenirs viennent de tes conversations ou que tu as ajoutés toi-même. Tu peux les corriger ou les supprimer à tout moment — rien n'est caché.</p>
+
+    <form id="memory-add-form" onsubmit="return false;">
+      <textarea id="memory-add-input" rows="1" placeholder="Ajoute un souvenir manuellement…" maxlength="4000"></textarea>
+      <button type="button" id="memory-add-btn" onclick="submitNewMemory()">+ Ajouter</button>
+    </form>
+
+    <div id="memory-list"><div class="memory-loading">Chargement…</div></div>
+  </div>
+</div>
+
+<!-- Modale Salle des Agents — le SuperAdmin questionne un agent directement -->
+<div id="agent-room-modal">
+  <div id="agent-room-box">
+    <div class="memory-header">
+      <div class="memory-title mono" id="agent-room-title" style="color:#ff9f4a">AGENT</div>
+      <button id="agent-room-close" onclick="closeAgentRoom()" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <p class="memory-desc" id="agent-room-desc"></p>
+    <div id="agent-room-badges" class="agent-room-badges"></div>
+
+    <div id="agent-room-log"></div>
+
+    <form id="agent-room-form" onsubmit="return false;">
+      <textarea id="agent-room-input" rows="1" placeholder="Donne un ordre ou pose une question à cet agent…" maxlength="8000"></textarea>
+      <button type="button" id="agent-room-send" onclick="sendToAgentRoom()">Envoyer</button>
+    </form>
+  </div>
+</div>
+
 <div id="voice-overlay">
   <div class="voice-wave">
     <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
@@ -677,6 +836,8 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
       <div class="sidebar-label mono" style="margin-top:16px">Projets actifs</div>
       <div id="active-projects-list" class="projects-row"></div>
     </div>
+
+    <button id="open-memory-btn" onclick="openMemoryModal()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9.5 2a5.5 5.5 0 0 0-4.3 8.9A4.5 4.5 0 0 0 7 19.5h1v-15"/><path d="M14.5 2a5.5 5.5 0 0 1 4.3 8.9A4.5 4.5 0 0 1 17 19.5h-1v-15"/><path d="M8 6.5h1M8 11h1M8 15.5h1M15 6.5h1M15 11h1M15 15.5h1"/></svg>Ce que MakenBrain sait de toi</button>
 
     <button id="new-chat-btn"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>Nouvelle session</button>
 
@@ -1107,6 +1268,234 @@ document.addEventListener('keydown', (e) => {
   if (e.ctrlKey && e.shiftKey && e.key === 'A') { e.preventDefault(); openAdminModal(); }
 });
 
+/* ── MÉMOIRE PERSONNELLE — "ce que MakenBrain sait de toi" ── */
+function openMemoryModal() {
+  document.getElementById('memory-modal').classList.add('open');
+  loadMemories();
+}
+function closeMemoryModal() { document.getElementById('memory-modal').classList.remove('open'); }
+document.getElementById('memory-modal').onclick = (e) => { if (e.target === e.currentTarget) closeMemoryModal(); };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('memory-modal').classList.contains('open')) closeMemoryModal();
+});
+
+function _escapeHtml(s) {
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+
+function _formatMemoryDate(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+  } catch (_) { return ''; }
+}
+
+async function loadMemories() {
+  const list = document.getElementById('memory-list');
+  list.innerHTML = '<div class="memory-loading">Chargement…</div>';
+  try {
+    const r = await fetch(`${API}/memories`, { headers: getHeaders({}) });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      list.innerHTML = `<div class="memory-error">${_escapeHtml(err.detail || "Mémoire indisponible pour le moment.")}</div>`;
+      return;
+    }
+    const data = await r.json();
+    renderMemories(data.memories || []);
+  } catch (e) {
+    list.innerHTML = '<div class="memory-error">Connexion impossible. Réessaie dans un instant.</div>';
+  }
+}
+
+function renderMemories(memories) {
+  const list = document.getElementById('memory-list');
+  list.innerHTML = '';
+  if (!memories.length) {
+    list.innerHTML = '<div class="memory-empty">Aucun souvenir pour l’instant. Discute avec MakenBrain ou ajoute-en un manuellement ci-dessus.</div>';
+    return;
+  }
+  memories.forEach(m => {
+    const card = document.createElement('div');
+    card.className = 'memory-card';
+    card.dataset.id = m.id;
+
+    const text = document.createElement('div');
+    text.className = 'memory-card-text';
+    text.textContent = m.content;
+    card.appendChild(text);
+
+    const meta = document.createElement('div');
+    meta.className = 'memory-card-meta';
+    const badge = document.createElement('span');
+    badge.className = 'memory-card-badge';
+    badge.textContent = `${m.source || 'manual'} · ${_formatMemoryDate(m.created_at)}`;
+    const actions = document.createElement('div');
+    actions.className = 'memory-card-actions';
+    actions.innerHTML = `
+      <button title="Corriger" onclick="startEditMemory('${m.id}')"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg></button>
+      <button title="Supprimer" class="memory-delete-btn" onclick="deleteMemoryCard('${m.id}')"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-8 0 1 13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1l1-13"/></svg></button>
+    `;
+    meta.appendChild(badge);
+    meta.appendChild(actions);
+    card.appendChild(meta);
+
+    list.appendChild(card);
+  });
+}
+
+function startEditMemory(id) {
+  const card = document.querySelector(`.memory-card[data-id="${id}"]`);
+  if (!card) return;
+  const textEl = card.querySelector('.memory-card-text');
+  const original = textEl.textContent;
+
+  const textarea = document.createElement('textarea');
+  textarea.className = 'memory-card-edit';
+  textarea.value = original;
+  textEl.replaceWith(textarea);
+  textarea.focus();
+
+  const actions = card.querySelector('.memory-card-actions');
+  actions.innerHTML = `
+    <button title="Enregistrer" onclick="saveEditMemory('${id}')" style="color:var(--accent)"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg></button>
+    <button title="Annuler" onclick="loadMemories()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  `;
+}
+
+async function saveEditMemory(id) {
+  const card = document.querySelector(`.memory-card[data-id="${id}"]`);
+  if (!card) return;
+  const textarea = card.querySelector('.memory-card-edit');
+  const content = textarea.value.trim();
+  if (!content) return;
+  try {
+    const r = await fetch(`${API}/memories/${id}`, {
+      method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ content }),
+    });
+    if (!r.ok) { const err = await r.json().catch(() => ({})); alert(err.detail || 'Échec de la mise à jour.'); }
+  } catch (_) { alert('Connexion impossible.'); }
+  loadMemories();
+}
+
+async function deleteMemoryCard(id) {
+  if (!confirm('Supprimer définitivement ce souvenir ?')) return;
+  try {
+    const r = await fetch(`${API}/memories/${id}`, { method: 'DELETE', headers: getHeaders({}) });
+    if (!r.ok) { const err = await r.json().catch(() => ({})); alert(err.detail || 'Échec de la suppression.'); }
+  } catch (_) { alert('Connexion impossible.'); }
+  loadMemories();
+}
+
+async function submitNewMemory() {
+  const input = document.getElementById('memory-add-input');
+  const content = input.value.trim();
+  if (!content) return;
+  const btn = document.getElementById('memory-add-btn');
+  btn.disabled = true;
+  try {
+    const r = await fetch(`${API}/memories`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ content, source: 'manual' }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(err.detail || "Impossible d'ajouter ce souvenir.");
+    } else {
+      input.value = '';
+    }
+  } catch (_) { alert('Connexion impossible.'); }
+  btn.disabled = false;
+  loadMemories();
+}
+document.getElementById('memory-add-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitNewMemory(); }
+});
+
+/* ── SALLE DES AGENTS — SuperAdmin questionne un agent directement ── */
+let _agentsSnapshot = {};   // name -> métadonnées (peuplé par loadAdminPanel)
+let currentAgentRoomName = null;
+
+function openAgentRoom(name) {
+  const a = _agentsSnapshot[name];
+  if (!a) return;
+  currentAgentRoomName = name;
+  document.getElementById('agent-room-title').textContent = name;
+  document.getElementById('agent-room-desc').textContent = a.description || '';
+
+  const badges = document.getElementById('agent-room-badges');
+  badges.innerHTML = '';
+  const auBadge = document.createElement('span');
+  auBadge.className = 'agent-autonomy ' + _autonomyClass(a.autonomy, a.version);
+  auBadge.textContent = a.autonomy || 'stub';
+  badges.appendChild(auBadge);
+  (a.capabilities || []).forEach(c => {
+    const chip = document.createElement('span');
+    chip.className = 'agent-cap-chip';
+    chip.textContent = c;
+    badges.appendChild(chip);
+  });
+
+  document.getElementById('agent-room-log').innerHTML = '';
+  document.getElementById('agent-room-modal').classList.add('open');
+  setTimeout(() => document.getElementById('agent-room-input').focus(), 100);
+}
+function closeAgentRoom() {
+  document.getElementById('agent-room-modal').classList.remove('open');
+  currentAgentRoomName = null;
+}
+document.getElementById('agent-room-modal').onclick = (e) => { if (e.target === e.currentTarget) closeAgentRoom(); };
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && document.getElementById('agent-room-modal').classList.contains('open')) closeAgentRoom();
+});
+
+function _appendAgentRoomMsg(text, isAgent, pending = false) {
+  const log = document.getElementById('agent-room-log');
+  const div = document.createElement('div');
+  div.className = 'agent-room-msg ' + (isAgent ? 'agent' : 'user') + (pending ? ' pending' : '');
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+  return div;
+}
+
+async function sendToAgentRoom() {
+  const input = document.getElementById('agent-room-input');
+  const message = input.value.trim();
+  if (!message || !currentAgentRoomName) return;
+  const agentName = currentAgentRoomName;
+
+  _appendAgentRoomMsg(message, false);
+  input.value = '';
+  const sendBtn = document.getElementById('agent-room-send');
+  sendBtn.disabled = true;
+  const placeholder = _appendAgentRoomMsg('Réflexion en cours…', true, true);
+
+  try {
+    const r = await fetch(`${API}/agents/${encodeURIComponent(agentName)}/ask`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify({ message }),
+    });
+    const data = await r.json().catch(() => ({}));
+    placeholder.remove();
+    if (!r.ok) {
+      _appendAgentRoomMsg(data.detail || `Échec de la requête (HTTP ${r.status}).`, true);
+    } else {
+      const bits = [];
+      if (typeof data.confidence === 'number') bits.push(`confiance ${Math.round(data.confidence * 100)}%`);
+      if (typeof data.duration_ms === 'number') bits.push(`${Math.round(data.duration_ms)} ms`);
+      const suffix = bits.length ? ` (${bits.join(', ')})` : '';
+      _appendAgentRoomMsg((data.output || data.error || 'Pas de réponse.') + suffix, true);
+    }
+  } catch (_) {
+    placeholder.remove();
+    _appendAgentRoomMsg('Connexion impossible.', true);
+  }
+  sendBtn.disabled = false;
+}
+document.getElementById('agent-room-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendToAgentRoom(); }
+});
+
 async function loadAdminPanel() {
   try {
     const [health, agents, stats, plans] = await Promise.all([
@@ -1132,17 +1521,24 @@ async function loadAdminPanel() {
 
     const grid = document.getElementById('agents-grid');
     if (agents && agents.agents) {
+      _agentsSnapshot = {};
+      agents.agents.forEach(a => { _agentsSnapshot[a.name] = a; });
       grid.innerHTML = agents.agents.map(a => {
-        const au = a.autonomy || '';
-        const auClass = au === 'suggest' ? 'autonomy-suggest' : au === 'sandboxed_execute' ? 'autonomy-sandboxed' :
-                        a.version?.includes('stub') ? 'autonomy-stub' : 'autonomy-readonly';
-        return `<div class="agent-row">
+        return `<div class="agent-row" onclick="openAgentRoom('${a.name}')" title="Parler directement à cet agent">
           <span class="agent-name">${a.name}</span>
-          <span class="agent-autonomy ${auClass}">${au || 'stub'}</span>
+          <span class="agent-autonomy ${_autonomyClass(a.autonomy, a.version)}">${a.autonomy || 'stub'}</span>
         </div>`;
       }).join('');
     }
   } catch (e) {}
+}
+
+function _autonomyClass(autonomy, version) {
+  if (autonomy === 'autonomous')        return 'autonomy-autonomous';
+  if (autonomy === 'suggest')           return 'autonomy-suggest';
+  if (autonomy === 'sandboxed_execute') return 'autonomy-sandboxed';
+  if (version && version.includes('stub')) return 'autonomy-stub';
+  return 'autonomy-readonly';
 }
 
 function renderAdminStats(stats) {
@@ -1837,6 +2233,12 @@ async function send(requestedByVoice = false) {
         body: JSON.stringify({ input: val, type: 'reasoning', session_id: currentSession }),
         signal: abortController.signal,
       });
+      if (res.status === 429) {
+        const err = await res.json().catch(() => ({}));
+        stopThinking();
+        addMsg(err.detail || 'Quota journalier atteint — réessaie demain.', true, true);
+        return;
+      }
       const data = await res.json();
       responseText = data.final_output || data.detail?.final_output || 'Aucune réponse des agents.';
       stopThinking();
