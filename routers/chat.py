@@ -16,7 +16,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from core.llm import generate, check_ollama_status
+from core.llm import generate, check_ollama_status, pick_local_model
 from core.memory import search_memory
 from core.providers import groq_generate, detect_provider
 from core.config import settings
@@ -120,6 +120,7 @@ def _fast_reply(message: str) -> str | None:
 class ChatRequest(BaseModel):
     message: str
     session_id: Optional[str] = None     # Si fourni, sauvegarde dans l'historique
+    image_base64: Optional[str] = None   # data URL (data:image/...;base64,...) → analyse vision
     use_memory: bool = True
     use_graph: bool = True
     n_context: int = 5
@@ -679,6 +680,44 @@ async def chat(
             session_id=request.session_id,
         )
 
+    # ── ANALYSE D'IMAGE (vision multimodale Groq — gratuit) ──────────────────
+    # L'utilisateur a joint une image : le modèle vision la voit réellement
+    # (description, lecture de texte, analyse, critique, suggestions).
+    if request.image_base64:
+        from core.providers import groq_vision
+
+        question = request.message.strip() or (
+            "Décris cette image en détail, puis propose des améliorations ou "
+            "des actions utiles selon son contenu."
+        )
+        try:
+            vision_reply = await groq_vision(
+                question,
+                request.image_base64,
+                system_prompt=build_system_prompt(current_user.role),
+            )
+        except Exception as exc:
+            logger.warning("Analyse vision indisponible : %s: %s", type(exc).__name__, exc)
+            vision_reply = (
+                "Je n'ai pas pu analyser l'image cette fois (service vision "
+                "momentanément indisponible). Réessaie dans un instant."
+            )
+        if request.session_id:
+            add_message(request.session_id, "user",
+                        f"[Image envoyée] {request.message}".strip(), str(current_user.id))
+            add_message(request.session_id, "assistant", vision_reply, str(current_user.id))
+            background_tasks.add_task(generate_smart_topic, request.session_id)
+        return ChatResponse(
+            response=vision_reply,
+            confidence=0.85,
+            risk_level="low",
+            memories_used=0,
+            graph_concepts=[],
+            model="llama-4-scout (vision)",
+            provider="groq",
+            session_id=request.session_id,
+        )
+
     # ── GÉNÉRATION D'IMAGES (Pollinations — gratuit) ─────────────────────────
     if _needs_image_generation(request.message):
         # Images et suggestions d'amélioration générées EN PARALLÈLE.
@@ -848,7 +887,7 @@ async def chat(
             request.message, context,
             system_prompt=system_prompt, history=conversation_history,
         )
-        model_name    = settings.OLLAMA_MODEL + " (local)"
+        model_name    = pick_local_model(request.message) + " (local)"
 
     response_evaluation = consciousness.evaluate_response(
         question=request.message,

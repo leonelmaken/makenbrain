@@ -236,6 +236,28 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 .import-opt svg { color:var(--text-dim); flex-shrink:0; transition:.15s; }
 .import-opt:hover svg { color:var(--accent); }
 
+/* ── APERÇU IMAGE VISION (avant envoi) ──────────────────────── */
+#vision-preview {
+  position:absolute; bottom:calc(100% + 10px); left:0;
+  display:flex; align-items:center; gap:9px; padding:7px 10px 7px 7px;
+  background:var(--bg-elevated); border:0.5px solid var(--border); border-radius:14px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);
+}
+#vision-preview.hidden { display:none; }
+#vision-preview img { width:38px; height:38px; border-radius:8px; object-fit:cover; }
+#vision-preview button {
+  background:rgba(255,255,255,.06); border:none; border-radius:50%;
+  width:20px; height:20px; color:var(--text-dim); cursor:pointer;
+  font-size:11px; line-height:1; display:flex; align-items:center; justify-content:center;
+}
+#vision-preview button:hover { color:var(--danger); background:rgba(255,90,90,.12); }
+
+/* Vignette de l'image envoyée dans la bulle utilisateur */
+.user-vision-thumb {
+  max-width:220px; max-height:220px; border-radius:12px;
+  display:block; margin-bottom:6px; object-fit:cover;
+}
+
 /* ── HISTORY SHEET ── */
 #sheet-backdrop { position:fixed; inset:0; background:rgba(2,3,8,.62); backdrop-filter:blur(6px); opacity:0; pointer-events:none; transition:opacity .45s ease; z-index:800; }
 #sheet-backdrop.open { opacity:1; pointer-events:all; }
@@ -722,6 +744,13 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 </div>
 
 <div id="dock-wrapper">
+  <!-- Aperçu de l'image jointe pour analyse vision -->
+  <div id="vision-preview" class="hidden">
+    <img id="vision-preview-img" src="" alt="Image à analyser">
+    <span class="mono" style="font-size:9px; letter-spacing:1.5px; color:var(--text-dim)">IMAGE À ANALYSER</span>
+    <button onclick="clearVisionImage()" title="Retirer l'image">✕</button>
+  </div>
+
   <button id="history-handle" class="mono">
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg>
     Historique
@@ -733,6 +762,7 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
       <div class="import-opt" onclick="triggerFile('folder')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7a1 1 0 0 1 1-1h5l2 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z"/></svg>Dossier</div>
       <div class="import-opt" onclick="triggerFile('media')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="M21 16l-5-5-4 4-3-3-6 6"/></svg>Images / vidéos</div>
       <div class="import-opt" onclick="triggerFile('zip')"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="5" rx="1"/><path d="M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9"/><path d="M10 13h4"/></svg>Archive ZIP</div>
+      <div class="import-opt" onclick="triggerVisionImage()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Analyser une image</div>
     </div>
 
     <button class="dock-btn" id="attach-btn" aria-label="Joindre des fichiers">
@@ -742,6 +772,7 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
     <input type="file" id="file-folder" webkitdirectory mozdirectory directory multiple hidden>
     <input type="file" id="file-media" accept="image/*,video/*" multiple hidden>
     <input type="file" id="file-zip" accept=".zip" hidden>
+    <input type="file" id="file-vision" accept="image/*" hidden>
 
     <button class="dock-btn" id="voice-toggle" aria-label="Réponse audio automatique">
       <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 5V4L8 9H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/><path d="M19 6a9 9 0 0 1 0 12"/></svg>
@@ -1558,6 +1589,59 @@ function appendSources(sources = [], images = []) {
   chat.scrollTop = chat.scrollHeight;
 }
 
+/* ── VISION : image jointe au chat pour analyse ── */
+let pendingVisionImage = null;
+
+function triggerVisionImage() {
+  importDropdown.classList.remove('open');
+  document.getElementById('file-vision').click();
+}
+
+function clearVisionImage() {
+  pendingVisionImage = null;
+  document.getElementById('vision-preview').classList.add('hidden');
+}
+
+function _resizeImageToDataURL(file, maxDim = 1024) {
+  // Redimensionnement côté client : image envoyée en JPEG ≤ 1024px —
+  // payload léger même sur réseau lent, suffisant pour l'analyse vision.
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.round(img.width * scale));
+      canvas.height = Math.max(1, Math.round(img.height * scale));
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(img.src);
+      resolve(canvas.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function _attachImageForVision(file) {
+  // Point d'entrée UNIQUE pour attacher une image à analyser — utilisé par
+  // "Analyser une image" ET par "Images / vidéos" quand un fichier image
+  // est choisi (voir listener file-media ci-dessous). Évite d'avoir deux
+  // chemins différents qui se comportent différemment.
+  try {
+    pendingVisionImage = await _resizeImageToDataURL(file);
+    document.getElementById('vision-preview-img').src = pendingVisionImage;
+    document.getElementById('vision-preview').classList.remove('hidden');
+    input.focus();
+  } catch (_) {
+    pendingVisionImage = null;
+  }
+}
+
+document.getElementById('file-vision').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (file) await _attachImageForVision(file);
+});
+
 /* ── LIGHTBOX — agrandissement des images générées ── */
 let _lightboxUrl = '';
 function openLightbox(url, caption) {
@@ -1699,20 +1783,41 @@ function flashActing() {
 async function send(requestedByVoice = false) {
   if (isThinking) { stopThinking(); return; }
   const val = input.value.trim();
-  if (!val) return;
+  const visionImage = pendingVisionImage;
+  if (!val && !visionImage) return;
 
   speechSynthesis.cancel();
-  addMsg(val, false);
+  if (visionImage) {
+    // Aperçu de l'image envoyée directement dans la bulle utilisateur.
+    startChatUI();
+    const div = document.createElement('div');
+    div.className = 'msg user-msg';
+    const img = document.createElement('img');
+    img.src = visionImage; img.className = 'user-vision-thumb';
+    div.appendChild(img);
+    if (val) {
+      const body = document.createElement('div');
+      body.className = 'msg-body'; body.textContent = val;
+      div.appendChild(body);
+    }
+    chat.appendChild(div);
+    chat.scrollTop = chat.scrollHeight;
+  } else {
+    addMsg(val, false);
+  }
   input.value = '';
+  clearVisionImage();
 
   isThinking = true;
   const useAgent = agentMode;
   const isImageReq = /g[ée]n[èe]re|dessine|cr[ée]e/.test(val.toLowerCase()) && /image|logo|illustr/.test(val.toLowerCase());
-  const phases = isImageReq
-    ? ['LECTURE DE TA DEMANDE…', 'ÉCRITURE DU PROMPT VISUEL…', 'CRÉATION DES IMAGES…']
-    : needsWebSearchUI(val)
-      ? ['RECHERCHE DE SOURCES WEB…', 'LECTURE DES RÉSULTATS…', 'VÉRIFICATION DES FAITS…', 'RÉDACTION DE LA RÉPONSE…']
-      : null;
+  const phases = visionImage
+    ? ["LECTURE DE L'IMAGE…", 'ANALYSE VISUELLE…', 'RÉDACTION DE LA RÉPONSE…']
+    : isImageReq
+      ? ['LECTURE DE TA DEMANDE…', 'ÉCRITURE DU PROMPT VISUEL…', 'CRÉATION DES IMAGES…']
+      : needsWebSearchUI(val)
+        ? ['RECHERCHE DE SOURCES WEB…', 'LECTURE DES RÉSULTATS…', 'VÉRIFICATION DES FAITS…', 'RÉDACTION DE LA RÉPONSE…']
+        : null;
   showThinking(useAgent ? 'RAISONNEMENT EXPERT' : 'ANALYSE NEURONALE', phases);
   sendBtn.innerHTML = STOP_ICON;
   sendBtn.classList.add('stop');
@@ -1724,7 +1829,7 @@ async function send(requestedByVoice = false) {
   try {
     let responseText;
 
-    if (useAgent) {
+    if (useAgent && !visionImage) {
       /* ── Agent mode → /agents/execute ── */
       const res = await fetch(`${API}/agents/execute`, {
         method: 'POST',
@@ -1737,11 +1842,14 @@ async function send(requestedByVoice = false) {
       stopThinking();
       addMsg(responseText, true, true);
     } else {
-      /* ── Chat mode → /chat/ ── */
+      /* ── Chat mode → /chat/ (image jointe = analyse vision) ── */
       const res = await fetch(`${API}/chat/`, {
         method: 'POST',
         headers: getHeaders(),
-        body: JSON.stringify({ message: val, session_id: currentSession, use_memory: true }),
+        body: JSON.stringify({
+          message: val, session_id: currentSession, use_memory: true,
+          image_base64: visionImage || undefined,
+        }),
         signal: abortController.signal,
       });
       if (res.status === 429) {
@@ -2023,7 +2131,21 @@ function triggerFile(type) {
   document.getElementById(map[type]).click();
 }
 
-['file-all', 'file-folder', 'file-media', 'file-zip'].forEach(id => {
+// "Images / vidéos" : une image seule → analyse vision directe (comme
+// ChatGPT/Claude, sans détour par l'ingestion mémoire). Plusieurs fichiers
+// ou une vidéo → ingestion classique (réservée SuperAdmin, voir uploadFiles).
+document.getElementById('file-media').addEventListener('change', async (e) => {
+  const files = e.target.files;
+  e.target.value = '';
+  if (!files.length) return;
+  if (files.length === 1 && files[0].type.startsWith('image/')) {
+    await _attachImageForVision(files[0]);
+    return;
+  }
+  uploadFiles(files);
+});
+
+['file-all', 'file-folder', 'file-zip'].forEach(id => {
   document.getElementById(id).addEventListener('change', (e) => {
     if (e.target.files.length) uploadFiles(e.target.files);
     e.target.value = '';
@@ -2039,17 +2161,32 @@ function uploadFiles(fileList) {
   setBrainState('analyzing');
 
   const xhr = new XMLHttpRequest();
-  xhr.open('POST', `${API}/ingest/upload`);
+  // Route réelle d'upload : /files/upload (SECURE — X-API-Key admin requis).
+  // "/ingest/upload" n'a jamais existé côté backend — c'était la cause du 404.
+  xhr.open('POST', `${API}/files/upload`);
   const _h = Auth.headers();
   if (_h['Authorization']) xhr.setRequestHeader('Authorization', _h['Authorization']);
   if (_h['X-API-Key'])     xhr.setRequestHeader('X-API-Key', _h['X-API-Key']);
   xhr.upload.onprogress = (e) => { if (e.lengthComputable) progressFill.style.width = `${Math.round(e.loaded / e.total * 100)}%`; };
   xhr.onload = () => {
-    progressFill.style.width = '100%';
-    flashActing();
-    setTimeout(() => ingestUI.classList.remove('active'), 900);
+    // onload se déclenche pour TOUTE réponse HTTP (y compris 401/403/404/500) —
+    // vérifier le statut est indispensable, sinon un échec s'affiche comme un succès.
+    ingestUI.classList.remove('active');
+    if (xhr.status >= 200 && xhr.status < 300) {
+      progressFill.style.width = '100%';
+      flashActing();
+    } else {
+      setBrainState('idle');
+      let detail = `Échec de l'import (HTTP ${xhr.status}).`;
+      try { detail = JSON.parse(xhr.responseText).detail || detail; } catch (_) {}
+      addMsg(detail, true);
+    }
   };
-  xhr.onerror = () => { ingestUI.classList.remove('active'); setBrainState('idle'); };
+  xhr.onerror = () => {
+    ingestUI.classList.remove('active');
+    setBrainState('idle');
+    addMsg("Échec de l'import — connexion au serveur impossible.", true);
+  };
   xhr.send(form);
 }
 

@@ -16,6 +16,7 @@ logger = logging.getLogger("makenbrain.providers")
 
 GROQ_MODEL   = "llama-3.3-70b-versatile"
 GROQ_FAST    = "llama-3.1-8b-instant"     # fallback ultra-rapide
+GROQ_VISION  = "meta-llama/llama-4-scout-17b-16e-instruct"  # multimodal (analyse d'images)
 
 # Mots-clés qui déclenchent le mode Groq en auto
 COMPLEX_KEYWORDS = {
@@ -62,6 +63,35 @@ def detect_provider(message: str, requested: str = "auto") -> str:
 
 
 # ── Groq ──────────────────────────────────────────────────────────────────────
+
+async def groq_vision(prompt: str, image_data_url: str, system_prompt: str = None) -> str:
+    """Analyse une image via le modèle multimodal Groq (gratuit).
+
+    `image_data_url` : data URL base64 (data:image/jpeg;base64,...) envoyée
+    par le frontend. Le modèle voit l'image et répond à la question posée.
+    """
+    client = _groq_client()
+    current_system = system_prompt or SYSTEM_PROMPT
+    logger.info("Groq vision request model=%s prompt_chars=%s image_chars=%s",
+                GROQ_VISION, len(prompt), len(image_data_url))
+    response = client.chat.completions.create(
+        model=GROQ_VISION,
+        messages=[
+            # Note : les modèles vision Groq n'acceptent pas de message
+            # system avec des images — instructions fusionnées dans le texte.
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"{current_system}\n\n---\n\n{prompt}"},
+                    {"type": "image_url", "image_url": {"url": image_data_url}},
+                ],
+            }
+        ],
+        temperature=0.5,
+        max_tokens=2048,
+    )
+    return response.choices[0].message.content or ""
+
 
 def _groq_client() -> GroqClient:
     if not settings.GROQ_API_KEY:
