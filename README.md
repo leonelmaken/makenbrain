@@ -1,8 +1,8 @@
-# MakenBrain
+﻿# MakenBrain
 
 **A self-hosted personal AI assistant with memory, a reasoning engine, and multi-agent orchestration.**
 
-`v0.13.0` — Phase 8: Multi-Agent Collaborative Orchestration
+`v0.13.0` â€” Phase 8: Multi-Agent Collaborative Orchestration
 
 Built in Python with FastAPI. MakenBrain answers questions using its own stored knowledge, reasons about what it does and does not know, and says so when it isn't sure instead of inventing an answer.
 
@@ -14,7 +14,7 @@ Built in Python with FastAPI. MakenBrain answers questions using its own stored 
 
 Most assistants answer confidently whether or not they should. MakenBrain was built around the opposite constraint: **an assistant that scores its own confidence before replying, and flags uncertainty rather than filling the gap with a plausible guess.**
 
-Everything else — the memory, the knowledge graph, the multi-agent orchestration — exists to make that possible.
+Everything else â€” the memory, the knowledge graph, the multi-agent orchestration â€” exists to make that possible.
 
 ---
 
@@ -115,15 +115,6 @@ So the architecture went a different way. The **provider layer** routes each req
 - **Evaluation is manual.** There is no automated regression suite measuring answer quality across versions - only unit and integration tests on the code itself.
 - **Local model quality bounds the reasoning.** Routing to a small local model keeps costs at zero but caps how well the harder reasoning stages perform.
 
----
-
-## Status
-
-Personal project, actively developed in phases. Each phase ships on its own branch and merges into `main`.
-
-Author: **Leonel Maken Dongmo Djouake** - Yaounde, Cameroon
-[GitHub](https://github.com/leonelmaken) - [LinkedIn](https://www.linkedin.com/in/leonelmaken) - [Portfolio](https://portfolio-leonel-xi.vercel.app)
-
 ### A bug worth documenting: conversation histories bleeding across users
 
 While adding an unrelated feature, I noticed something that didn't add up: a chat session was showing history that didn't belong to the account I was signed in as.
@@ -140,3 +131,15 @@ The second layer is redundant while the first is correct - which is the point. A
 **How I knew it was fixed:** signing in as a second account and requesting a session id belonging to the first now fails at the ownership check rather than returning data.
 
 **What I took from it:** authentication and authorisation are different questions, and passing the first tells you nothing about the second. I now treat "who is asking" and "what may they see" as two checks, not one.
+
+---
+
+
+
+## Status
+
+Personal project, actively developed in phases. Each phase ships on its own branch and merges into `main`.
+
+Author: **Leonel Maken Dongmo Djouake** - Yaounde, Cameroon
+[GitHub](https://github.com/leonelmaken) - [LinkedIn](https://www.linkedin.com/in/leonelmaken) - [Portfolio](https://portfolio-leonel-xi.vercel.app)
+
