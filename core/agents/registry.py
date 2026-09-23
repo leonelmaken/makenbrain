@@ -149,24 +149,34 @@ def get_registry() -> AgentRegistry:
 
 
 def register_defaults() -> None:
-    """Enregistre les agents par défaut (Phases 5 et 6).
+    """Enregistre les agents par défaut (Phases 5, 6 et 10).
 
     À appeler une seule fois dans le lifespan FastAPI, après l'initialisation
     de la mémoire vectorielle.
 
     Agents enregistrés :
-        - ReasoningAgent  (pipeline 3.1→3.5)           [Phase 5]
-        - MemoryAgent     (lecture/écriture ChromaDB)   [Phase 6]
-        - PlanningAgent   (décomposition de tâches)     [Phase 6]
-        - ResearchAgent   (stub — implémentation Ph. 7) [Phase 6]
+        - ReasoningAgent  (pipeline 3.1→3.5)                    [Phase 5]
+        - MemoryAgent     (lecture/écriture ChromaDB)            [Phase 6]
+        - PlanningAgent   (décomposition de tâches)              [Phase 6]
+        - ResearchAgent   (recherche web multi-sources)          [Phase 7]
+        - ArchitectAgent  (conception & architecture)            [Phase 10]
+        - CodingAgent     (implémentation, debug, refactoring)   [Phase 10]
+        - TestAgent       (stratégie de test & tests exécutables)[Phase 10]
+        - PresenterAgent  (présentations PowerPoint .pptx)       [Phase 10]
     """
-    from core.agents.reasoning_agent import ReasoningAgent
-    from core.agents.memory_agent    import MemoryAgent
-    from core.agents.planning_agent  import PlanningAgent
-    from core.agents.research_agent  import ResearchAgent
+    from core.agents.reasoning_agent    import ReasoningAgent
+    from core.agents.memory_agent       import MemoryAgent
+    from core.agents.planning_agent     import PlanningAgent
+    from core.agents.research_agent     import ResearchAgent
+    from core.agents.engineering_agents import ArchitectAgent, CodingAgent, TestAgent
+    from core.agents.presenter_agent    import PresenterAgent
 
     registry = get_registry()
     registry.register(ReasoningAgent())
     registry.register(MemoryAgent())
     registry.register(PlanningAgent())
     registry.register(ResearchAgent())
+    registry.register(ArchitectAgent())
+    registry.register(CodingAgent())
+    registry.register(TestAgent())
+    registry.register(PresenterAgent())

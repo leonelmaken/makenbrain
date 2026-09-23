@@ -294,6 +294,45 @@ async def _image_improvement_suggestions(message: str) -> list[str]:
         return []
 
 
+# ── Présentations PowerPoint (PresenterAgent) ─────────────────────────────────
+_PRESENTATION_KEYWORDS = ("présentation", "presentation", "powerpoint", "pptx", "diapo", "slides")
+_PRESENTATION_VERBS = ("fais", "fait", "crée", "cree", "prépare", "prepare",
+                       "génère", "genere", "conçois", "concois", "monte", "réalise", "realise")
+
+
+def _needs_presentation(message: str) -> bool:
+    """Détecte une demande de CRÉATION de présentation (verbe + mot-clé).
+
+    Le verbe est exigé pour ne pas déclencher sur une simple question
+    ("c'est quoi une bonne présentation ?").
+    """
+    lowered = message.lower()
+    return (any(k in lowered for k in _PRESENTATION_KEYWORDS)
+            and any(v in lowered for v in _PRESENTATION_VERBS))
+
+
+async def _run_presenter(message: str, user_id: str) -> tuple[str, bool]:
+    """Exécute le PresenterAgent et retourne (réponse_markdown, succès)."""
+    from core.agents.models import AgentTask, ExecutionContext
+    from core.agents.registry import get_registry
+
+    agent = get_registry().get("presenter_agent")
+    if agent is None:
+        from core.agents.presenter_agent import PresenterAgent
+        agent = PresenterAgent()
+
+    task = AgentTask(type="presentation", input=message, user_id=user_id)
+    ctx = ExecutionContext(request_id=str(task.task_id), task=task, user_id=user_id)
+    result = await agent.run(task, ctx)
+    if result.success and result.output:
+        return result.output, True
+    return (
+        "La génération de la présentation a échoué "
+        f"({result.error or 'raison inconnue'}). Réessaie dans un instant.",
+        False,
+    )
+
+
 # ── Recherche web ancrée (façon Perplexity) ──────────────────────────────────
 # Quand la question est factuelle ou d'actualité, une VRAIE recherche web est
 # faite en temps réel et injectée dans le contexte. Le modèle a l'interdiction
@@ -718,6 +757,24 @@ async def chat(
             session_id=request.session_id,
         )
 
+    # ── PRÉSENTATIONS POWERPOINT (fichier .pptx réel, téléchargeable) ────────
+    if _needs_presentation(request.message):
+        reply, ok = await _run_presenter(request.message, str(current_user.id))
+        if request.session_id:
+            add_message(request.session_id, "user", request.message, str(current_user.id))
+            add_message(request.session_id, "assistant", reply, str(current_user.id))
+            background_tasks.add_task(generate_smart_topic, request.session_id)
+        return ChatResponse(
+            response=reply,
+            confidence=0.85 if ok else 0.2,
+            risk_level="low",
+            memories_used=0,
+            graph_concepts=[],
+            model="presenter_agent",
+            provider="agents",
+            session_id=request.session_id,
+        )
+
     # ── GÉNÉRATION D'IMAGES (Pollinations — gratuit) ─────────────────────────
     if _needs_image_generation(request.message):
         # Images et suggestions d'amélioration générées EN PARALLÈLE.
@@ -829,9 +886,16 @@ async def chat(
 
     context = "\n\n".join(context_parts)
     chosen  = detect_provider(request.message, request.provider)
-    # Prompt système construit dynamiquement selon le rôle :
-    # SuperAdmin → prompt personnel ; tout autre utilisateur → prompt générique.
-    system_prompt = build_system_prompt(current_user.role)
+    # Prompt système construit dynamiquement selon le rôle ET le métier :
+    # SuperAdmin → prompt personnel ; autres → générique + adaptation au
+    # domaine/profession de l'utilisateur (détecté ou déclaré).
+    from core.user_profiles import get_profile, maybe_autodetect
+    user_profile_data = get_profile(str(current_user.id))
+    system_prompt = build_system_prompt(current_user.role, profile=user_profile_data)
+    if not user_profile_data.get("domain"):
+        # Profil encore vide : tentative de détection en arrière-plan
+        # (throttlée à 1/24h dans maybe_autodetect — jamais bloquante).
+        background_tasks.add_task(maybe_autodetect, str(current_user.id))
     if web_sources:
         system_prompt += _GROUNDING_RULES
     elif web_attempted:

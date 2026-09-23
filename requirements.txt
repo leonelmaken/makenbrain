@@ -33,5 +33,8 @@ ddgs==9.14.4                      # successeur officiel de duckduckgo_search
 beautifulsoup4==4.15.0            # extraction de texte des pages
 aiohttp==3.14.1                   # agent de recherche Phase 7
 
+# ── Génération de documents (presenter_agent) ───────────────────────
+python-pptx==1.0.2
+
 # ── MCP (serveur d'outils) ───────────────────────────────────────────
 mcp==1.27.2

@@ -53,12 +53,37 @@ Règles fondamentales :
 - Pas de remplissage. Pas de répétition."""
 
 
-def build_system_prompt(role: UserRole | str | None = None) -> str:
-    """Retourne le prompt système adapté au rôle de l'utilisateur courant.
+def build_system_prompt(
+    role: UserRole | str | None = None,
+    profile: dict | None = None,
+) -> str:
+    """Retourne le prompt système adapté au rôle ET au métier de l'utilisateur.
 
     SuperAdmin → prompt personnel (identité et projets de Leonel).
     Tout autre rôle, rôle inconnu ou absent → prompt générique.
+    Si un profil métier existe (domaine/profession détecté ou déclaré),
+    une consigne d'adaptation est ajoutée : MakenBrain ne répond pas pareil
+    à un médecin, un enseignant ou un ingénieur.
     """
     if role == UserRole.SUPERADMIN or role == UserRole.SUPERADMIN.value:
-        return SUPERADMIN_SYSTEM_PROMPT
-    return SYSTEM_PROMPT
+        base = SUPERADMIN_SYSTEM_PROMPT
+    else:
+        base = SYSTEM_PROMPT
+
+    if profile:
+        domain = str(profile.get("domain") or "").strip()
+        profession = str(profile.get("profession") or "").strip()
+        level = str(profile.get("expertise_level") or "").strip()
+        if domain or profession:
+            who = profession or domain
+            base += (
+                f"\n\nPROFIL DE TON UTILISATEUR : {who}"
+                + (f" (domaine : {domain})" if domain and profession else "")
+                + (f", niveau {level}" if level else "")
+                + ".\n"
+                "Adapte-toi à ce métier : vocabulaire, profondeur technique, "
+                "exemples tirés de son domaine, et outils/références qu'il "
+                "utilise réellement. Ne sur-explique pas ce qu'un professionnel "
+                "de ce domaine connaît déjà ; approfondis là où il travaille."
+            )
+    return base

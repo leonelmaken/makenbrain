@@ -319,6 +319,9 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 #memory-close:hover { color:var(--text-bright); }
 .memory-desc { font-size:12px; color:var(--text-dim); margin-bottom:16px; line-height:1.6; }
 
+#profile-form {
+  display:grid; grid-template-columns:1fr 150px 44px 76px; gap:6px; align-items:center;
+}
 #memory-add-form { display:flex; gap:8px; margin-bottom:16px; }
 #memory-add-input {
   flex:1; padding:10px 13px; background:rgba(255,255,255,.04); border:0.5px solid var(--border);
@@ -455,6 +458,63 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
 }
 #agent-room-send:hover { background:rgba(255,159,74,.18); }
 #agent-room-send:disabled { opacity:.4; cursor:not-allowed; }
+
+/* ── WIZARD DE PRÉSENTATION (façon Gamma) ─────────────────── */
+#pres-modal {
+  position:fixed; inset:0; z-index:200000; background:rgba(2,3,10,.88);
+  display:none; align-items:center; justify-content:center;
+  backdrop-filter:blur(28px);
+}
+#pres-modal.open { display:flex; }
+#pres-box {
+  width:min(720px,94vw); max-height:90vh; display:flex; flex-direction:column;
+  background:var(--bg-elevated); border:0.5px solid rgba(45,226,201,.25);
+  border-radius:20px; padding:26px; box-shadow:0 30px 80px rgba(0,0,0,.7), 0 0 40px rgba(45,226,201,.06);
+  overflow-y:auto;
+}
+.pres-close-btn { background:none; border:none; color:var(--text-dim); cursor:pointer; padding:4px; }
+.pres-close-btn:hover { color:var(--text-bright); }
+.pres-label {
+  display:block; font-size:9px; letter-spacing:1.8px; color:var(--text-dim);
+  text-transform:uppercase; margin:14px 0 7px;
+}
+.pres-wide { width:100%; }
+.pres-row { display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; }
+.pres-row .pres-label { margin-top:14px; }
+#pres-source { resize:vertical; font-family:inherit; }
+.pres-themes { display:grid; grid-template-columns:repeat(4, 1fr); gap:8px; }
+.pres-theme-swatch {
+  border-radius:12px; border:2px solid var(--border); cursor:pointer;
+  padding:10px 8px; text-align:center; transition:.2s; position:relative; overflow:hidden;
+}
+.pres-theme-swatch:hover { transform:translateY(-2px); }
+.pres-theme-swatch.selected { border-color:var(--accent); box-shadow:0 0 0 2px rgba(45,226,201,.25); }
+.pres-theme-dot { width:22px; height:22px; border-radius:50%; margin:0 auto 7px; }
+.pres-theme-name { font-size:10px; letter-spacing:.5px; }
+.pres-actions { display:flex; gap:10px; margin-top:20px; justify-content:flex-end; flex-wrap:wrap; }
+.pres-btn {
+  padding:10px 18px; border-radius:11px; font-size:12px; letter-spacing:.8px;
+  cursor:pointer; font-family:inherit; transition:.2s; text-decoration:none;
+  display:inline-flex; align-items:center; gap:6px;
+}
+.pres-btn.primary {
+  background:rgba(45,226,201,.12); color:var(--accent);
+  border:0.5px solid rgba(45,226,201,.35);
+}
+.pres-btn.primary:hover { background:rgba(45,226,201,.2); }
+.pres-btn.ghost {
+  background:rgba(255,255,255,.04); color:var(--text);
+  border:0.5px solid var(--border);
+}
+.pres-btn.ghost:hover { background:rgba(255,255,255,.08); color:var(--text-bright); }
+#pres-loading { padding:60px 0; }
+#pres-loading.hidden, #pres-preview.hidden, #pres-form.hidden { display:none; }
+.pres-loading-inner { display:flex; flex-direction:column; align-items:center; gap:18px; }
+#pres-loading-text { font-size:10px; letter-spacing:2.5px; color:var(--accent); }
+#pres-iframe {
+  width:100%; aspect-ratio:16/9; border:0.5px solid var(--border);
+  border-radius:14px; background:#05060a;
+}
 
 #admin-logout-sheet {
   width:100%; margin-top:12px; padding:10px; border:none; border-radius:9px;
@@ -783,6 +843,16 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
     </div>
     <p class="memory-desc">Ces souvenirs viennent de tes conversations ou que tu as ajoutés toi-même. Tu peux les corriger ou les supprimer à tout moment — rien n'est caché.</p>
 
+    <!-- Profil métier : MakenBrain adapte ses réponses à ton domaine -->
+    <div class="sidebar-label mono" style="margin-bottom:8px">Ton profil métier</div>
+    <div id="profile-form">
+      <input id="profile-profession" class="plan-input" placeholder="Profession (ex. Ingénieur full-stack)" maxlength="120">
+      <select id="profile-domain" class="plan-input"></select>
+      <button type="button" class="plan-save mono" onclick="saveMyProfile()">OK</button>
+      <button type="button" class="plan-save mono" onclick="detectMyProfile()" title="Laisser MakenBrain déduire ton métier de tes conversations">Détecter</button>
+    </div>
+    <div id="profile-status" class="mono" style="font-size:9px; color:var(--text-dim); margin:6px 0 14px; letter-spacing:.5px"></div>
+
     <form id="memory-add-form" onsubmit="return false;">
       <textarea id="memory-add-input" rows="1" placeholder="Ajoute un souvenir manuellement…" maxlength="4000"></textarea>
       <button type="button" id="memory-add-btn" onclick="submitNewMemory()">+ Ajouter</button>
@@ -810,6 +880,90 @@ h1 { font-family:'Syncopate',sans-serif; font-size:40px; font-weight:700; color:
       <textarea id="agent-room-input" rows="1" placeholder="Donne un ordre ou pose une question à cet agent…" maxlength="8000"></textarea>
       <button type="button" id="agent-room-send" onclick="sendToAgentRoom()">Envoyer</button>
     </form>
+  </div>
+</div>
+
+<!-- Wizard de présentation — questions façon Gamma, chaque étape skippable -->
+<div id="pres-modal">
+  <div id="pres-box">
+    <div class="memory-header">
+      <div class="memory-title mono">CRÉATION DE PRÉSENTATION</div>
+      <button class="pres-close-btn" onclick="closePresWizard()" aria-label="Fermer">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+
+    <!-- Étape 1 : le formulaire (chaque champ est optionnel) -->
+    <div id="pres-form">
+      <p class="memory-desc">Réponds à ce qui t'intéresse — ou clique « MakenBrain décide » et je choisis intelligemment pour toi.</p>
+
+      <label class="pres-label mono">Sujet de la présentation</label>
+      <input id="pres-topic" class="plan-input pres-wide" placeholder="De quoi parle ta présentation ?" maxlength="500">
+
+      <label class="pres-label mono">Thème visuel</label>
+      <div id="pres-themes" class="pres-themes"></div>
+
+      <div class="pres-row">
+        <div>
+          <label class="pres-label mono">Diapositives</label>
+          <select id="pres-count" class="plan-input pres-wide">
+            <option value="">Auto</option>
+            <option value="5">5</option><option value="8">8</option>
+            <option value="10">10</option><option value="12">12</option>
+          </select>
+        </div>
+        <div>
+          <label class="pres-label mono">Police</label>
+          <select id="pres-font" class="plan-input pres-wide">
+            <option value="moderne">Moderne</option>
+            <option value="elegante">Élégante</option>
+            <option value="mono">Technique</option>
+          </select>
+        </div>
+        <div>
+          <label class="pres-label mono">Langue</label>
+          <select id="pres-lang" class="plan-input pres-wide">
+            <option value="">Auto</option>
+            <option value="français">Français</option>
+            <option value="english">English</option>
+          </select>
+        </div>
+        <div>
+          <label class="pres-label mono">Images IA</label>
+          <select id="pres-images" class="plan-input pres-wide">
+            <option value="true">Oui</option>
+            <option value="false">Non</option>
+          </select>
+        </div>
+      </div>
+
+      <label class="pres-label mono">Ton texte (optionnel — si tu as déjà le contenu, je le suis fidèlement)</label>
+      <textarea id="pres-source" class="plan-input pres-wide" rows="3" maxlength="20000" placeholder="Colle ton texte ici, ou laisse vide : je rédige un contenu approfondi."></textarea>
+
+      <div class="pres-actions">
+        <button type="button" class="pres-btn ghost mono" onclick="generatePresentation(true)">Passer — MakenBrain décide</button>
+        <button type="button" class="pres-btn primary mono" onclick="generatePresentation(false)">✨ Générer</button>
+      </div>
+    </div>
+
+    <!-- Étape 2 : génération en cours -->
+    <div id="pres-loading" class="hidden">
+      <div class="pres-loading-inner">
+        <div class="dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+        <span id="pres-loading-text" class="mono">RÉDACTION DU CONTENU…</span>
+      </div>
+    </div>
+
+    <!-- Étape 3 : aperçu AVANT téléchargement -->
+    <div id="pres-preview" class="hidden">
+      <iframe id="pres-iframe" title="Aperçu de la présentation"></iframe>
+      <div class="pres-actions">
+        <button type="button" class="pres-btn ghost mono" onclick="backToPresWizard()">✎ Modifier</button>
+        <button type="button" class="pres-btn ghost mono" onclick="regeneratePresentation()">🎲 Régénérer</button>
+        <button type="button" class="pres-btn ghost mono" onclick="window.open(_presResult.html_url, '_blank')">⛶ Plein écran</button>
+        <a id="pres-download" class="pres-btn primary mono" href="#" download>⬇ PowerPoint</a>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -1271,7 +1425,65 @@ document.addEventListener('keydown', (e) => {
 /* ── MÉMOIRE PERSONNELLE — "ce que MakenBrain sait de toi" ── */
 function openMemoryModal() {
   document.getElementById('memory-modal').classList.add('open');
+  loadMyProfile();
   loadMemories();
+}
+
+/* ── PROFIL MÉTIER — domaine/profession pilotant l'adaptation ── */
+async function loadMyProfile() {
+  const statusEl = document.getElementById('profile-status');
+  try {
+    const r = await fetch(`${API}/profile`, { headers: getHeaders({}) });
+    if (!r.ok) { statusEl.textContent = 'Profil indisponible.'; return; }
+    const data = await r.json();
+    const p = data.profile || {};
+    document.getElementById('profile-profession').value = p.profession || '';
+    const sel = document.getElementById('profile-domain');
+    sel.innerHTML = '';
+    const empty = document.createElement('option');
+    empty.value = ''; empty.textContent = 'Domaine…';
+    sel.appendChild(empty);
+    (data.known_domains || []).forEach(d => {
+      const o = document.createElement('option');
+      o.value = d; o.textContent = d.replace(/_/g, ' ');
+      if (d === p.domain) o.selected = true;
+      sel.appendChild(o);
+    });
+    statusEl.textContent = p.domain
+      ? `Profil ${p.source === 'auto' ? 'détecté automatiquement' : 'défini manuellement'} — MakenBrain adapte ses réponses à ton métier.`
+      : 'Aucun domaine défini — MakenBrain le détectera au fil de tes conversations, ou définis-le ici.';
+  } catch (_) {
+    statusEl.textContent = 'Connexion impossible.';
+  }
+}
+
+async function saveMyProfile() {
+  const statusEl = document.getElementById('profile-status');
+  const body = {};
+  const profession = document.getElementById('profile-profession').value.trim();
+  const domain = document.getElementById('profile-domain').value;
+  if (profession) body.profession = profession;
+  if (domain) body.domain = domain;
+  if (!Object.keys(body).length) return;
+  try {
+    const r = await fetch(`${API}/profile`, {
+      method: 'PUT', headers: getHeaders(), body: JSON.stringify(body),
+    });
+    const data = await r.json().catch(() => ({}));
+    statusEl.textContent = r.ok ? 'Profil enregistré ✓' : (data.detail || 'Échec de l’enregistrement.');
+    if (r.ok) setTimeout(loadMyProfile, 1200);
+  } catch (_) { statusEl.textContent = 'Connexion impossible.'; }
+}
+
+async function detectMyProfile() {
+  const statusEl = document.getElementById('profile-status');
+  statusEl.textContent = 'Analyse de tes conversations et souvenirs…';
+  try {
+    const r = await fetch(`${API}/profile/detect`, { method: 'POST', headers: getHeaders({}) });
+    const data = await r.json().catch(() => ({}));
+    statusEl.textContent = data.message || (r.ok ? 'Détection terminée.' : 'Échec de la détection.');
+    if (r.ok && data.profile?.domain) loadMyProfile();
+  } catch (_) { statusEl.textContent = 'Connexion impossible.'; }
 }
 function closeMemoryModal() { document.getElementById('memory-modal').classList.remove('open'); }
 document.getElementById('memory-modal').onclick = (e) => { if (e.target === e.currentTarget) closeMemoryModal(); };
@@ -1495,6 +1707,150 @@ async function sendToAgentRoom() {
 document.getElementById('agent-room-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendToAgentRoom(); }
 });
+
+/* ── WIZARD DE PRÉSENTATION — questions façon Gamma, tout skippable ── */
+let _presResult = null;      // dernier résultat de génération {html_url, pptx_url, ...}
+let _presTheme = 'makenbrain';
+let _presLoadingTimer = null;
+
+const PRES_KEYWORDS = ['présentation', 'presentation', 'powerpoint', 'pptx', 'diapo', 'slides'];
+const PRES_VERBS = ['fais', 'fait', 'crée', 'cree', 'prépare', 'prepare',
+                    'génère', 'genere', 'conçois', 'concois', 'monte', 'réalise', 'realise'];
+function needsPresentationUI(message) {
+  const m = message.toLowerCase();
+  return PRES_KEYWORDS.some(k => m.includes(k)) && PRES_VERBS.some(v => m.includes(v));
+}
+
+async function openPresWizard(topic) {
+  _presResult = null;
+  document.getElementById('pres-topic').value = topic || '';
+  document.getElementById('pres-form').classList.remove('hidden');
+  document.getElementById('pres-loading').classList.add('hidden');
+  document.getElementById('pres-preview').classList.add('hidden');
+  document.getElementById('pres-modal').classList.add('open');
+  // Thèmes chargés depuis le backend (source unique de vérité)
+  try {
+    const r = await fetch(`${API}/presentations/options`, { headers: getHeaders({}) });
+    if (r.ok) {
+      const data = await r.json();
+      const wrap = document.getElementById('pres-themes');
+      wrap.innerHTML = '';
+      Object.entries(data.themes || {}).forEach(([name, cfg]) => {
+        const sw = document.createElement('div');
+        sw.className = 'pres-theme-swatch' + (name === _presTheme ? ' selected' : '');
+        sw.style.background = cfg.bg;
+        const dot = document.createElement('div');
+        dot.className = 'pres-theme-dot';
+        dot.style.background = cfg.accent;
+        const label = document.createElement('div');
+        label.className = 'pres-theme-name';
+        label.style.color = cfg.accent;
+        label.textContent = cfg.label;
+        sw.appendChild(dot); sw.appendChild(label);
+        sw.onclick = () => {
+          _presTheme = name;
+          wrap.querySelectorAll('.pres-theme-swatch').forEach(x => x.classList.remove('selected'));
+          sw.classList.add('selected');
+        };
+        wrap.appendChild(sw);
+      });
+    }
+  } catch (_) {}
+}
+
+function closePresWizard() {
+  if (_presLoadingTimer) { clearInterval(_presLoadingTimer); _presLoadingTimer = null; }
+  document.getElementById('pres-modal').classList.remove('open');
+  document.getElementById('pres-iframe').src = 'about:blank';
+}
+document.getElementById('pres-modal').onclick = (e) => { if (e.target === e.currentTarget) closePresWizard(); };
+
+function _presShow(stage) {
+  ['pres-form', 'pres-loading', 'pres-preview'].forEach(id =>
+    document.getElementById(id).classList.toggle('hidden', id !== stage));
+}
+
+function _startPresLoadingPhases() {
+  const phases = ['ANALYSE DU SUJET…', 'RÉDACTION DU CONTENU…', 'CHOIX DES ILLUSTRATIONS…',
+                  'MISE EN PAGE DES DIAPOSITIVES…', 'EXPORT POWERPOINT…', 'DERNIÈRES FINITIONS…'];
+  let i = 0;
+  const el = document.getElementById('pres-loading-text');
+  el.textContent = phases[0];
+  _presLoadingTimer = setInterval(() => {
+    i = Math.min(i + 1, phases.length - 1);
+    el.textContent = phases[i];
+    if (i === phases.length - 1) { clearInterval(_presLoadingTimer); _presLoadingTimer = null; }
+  }, 4000);
+}
+
+function _collectPresParams(useDefaults) {
+  const topic = document.getElementById('pres-topic').value.trim();
+  if (useDefaults) return { topic, theme: _presTheme, with_images: true };
+  const body = { topic, theme: _presTheme };
+  const count = document.getElementById('pres-count').value;
+  if (count) body.slides_count = parseInt(count, 10);
+  body.font = document.getElementById('pres-font').value || 'moderne';
+  const lang = document.getElementById('pres-lang').value;
+  if (lang) body.language = lang;
+  body.with_images = document.getElementById('pres-images').value !== 'false';
+  const source = document.getElementById('pres-source').value.trim();
+  if (source) body.source_text = source;
+  return body;
+}
+
+let _presLastParams = null;
+async function generatePresentation(useDefaults) {
+  const params = _collectPresParams(useDefaults);
+  if (!params.topic || params.topic.length < 3) {
+    document.getElementById('pres-topic').focus();
+    return;
+  }
+  _presLastParams = params;
+  _presShow('pres-loading');
+  _startPresLoadingPhases();
+  try {
+    const r = await fetch(`${API}/presentations/generate`, {
+      method: 'POST', headers: getHeaders(), body: JSON.stringify(params),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (_presLoadingTimer) { clearInterval(_presLoadingTimer); _presLoadingTimer = null; }
+    if (!r.ok) {
+      _presShow('pres-form');
+      alert(data.detail || `Génération impossible (HTTP ${r.status}).`);
+      return;
+    }
+    _presResult = data;
+    // Aperçu AVANT téléchargement — le deck HTML animé dans une iframe
+    document.getElementById('pres-iframe').src = data.html_url;
+    document.getElementById('pres-download').href = data.pptx_url;
+    _presShow('pres-preview');
+    // Trace dans le chat (liens réutilisables plus tard)
+    startChatUI();
+    addMsg(`📊 Présentation « ${data.title} » — ${data.slides_count} diapositives générées.\n\n[▶ Aperçu animé](${data.html_url}) · [⬇ PowerPoint (.pptx)](${data.pptx_url})`, true);
+  } catch (_) {
+    if (_presLoadingTimer) { clearInterval(_presLoadingTimer); _presLoadingTimer = null; }
+    _presShow('pres-form');
+    alert('Connexion impossible — réessaie dans un instant.');
+  }
+}
+
+function backToPresWizard() { _presShow('pres-form'); }
+function regeneratePresentation() {
+  if (!_presLastParams) return;
+  _presShow('pres-loading');
+  _startPresLoadingPhases();
+  fetch(`${API}/presentations/generate`, {
+    method: 'POST', headers: getHeaders(), body: JSON.stringify(_presLastParams),
+  }).then(r => r.json()).then(data => {
+    if (_presLoadingTimer) { clearInterval(_presLoadingTimer); _presLoadingTimer = null; }
+    if (data.html_url) {
+      _presResult = data;
+      document.getElementById('pres-iframe').src = data.html_url;
+      document.getElementById('pres-download').href = data.pptx_url;
+    }
+    _presShow('pres-preview');
+  }).catch(() => { _presShow('pres-form'); });
+}
 
 async function loadAdminPanel() {
   try {
@@ -2181,6 +2537,14 @@ async function send(requestedByVoice = false) {
   const val = input.value.trim();
   const visionImage = pendingVisionImage;
   if (!val && !visionImage) return;
+
+  // Demande de présentation → wizard façon Gamma (questions + aperçu)
+  // au lieu d'une génération aveugle. Mode agent et vision non concernés.
+  if (!agentMode && !visionImage && needsPresentationUI(val)) {
+    input.value = '';
+    openPresWizard(val);
+    return;
+  }
 
   speechSynthesis.cancel();
   if (visionImage) {

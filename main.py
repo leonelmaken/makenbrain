@@ -21,6 +21,8 @@ from routers import agents as agents_router
 from routers import config as config_router
 from routers import stats as stats_router
 from routers import user_memory as user_memory_router
+from routers import profile as profile_router
+from routers import presentations as presentations_router
 # Force l'encodage UTF-8 sur stdout/stderr, quel que soit le code page actif
 # de la console Windows (cp1252 par défaut en environnement francophone).
 # Sans ça, le moindre print() contenant un emoji (utilisés dans tout le
@@ -129,6 +131,8 @@ app.include_router(agents_router.router, prefix="/agents", tags=["🤖 Agents"])
 app.include_router(config_router.router, prefix="/config",  tags=["⚙️ Config"])
 app.include_router(stats_router.router,  prefix="/admin",   tags=["📊 Statistiques"])
 app.include_router(user_memory_router.router, prefix="/memories", tags=["🧠 Mémoire Personnelle"])
+app.include_router(profile_router.router, prefix="/profile", tags=["👔 Profil Métier"])
+app.include_router(presentations_router.router, prefix="/presentations", tags=["📊 Présentations"])
 
 if GRAPH_AVAILABLE:
     app.include_router(graph.router, prefix="/graph", tags=["🕸️ Graphe de Neurones"])

@@ -25,6 +25,14 @@ from core.provider_layer.base import LLMProvider, ProviderHealth
 from core.provider_layer.groq_provider import GroqProvider
 from core.provider_layer.ollama_provider import OllamaProvider
 
+# Message sentinelle retourné quand TOUS les providers ont échoué.
+# Les agents peuvent comparer la sortie à cette constante pour détecter
+# un échec total (le router ne lève jamais d'exception par contrat).
+ALL_PROVIDERS_FAILED = (
+    "Aucun provider LLM n'est disponible pour le moment. "
+    "Vérifie qu'Ollama est lancé ou que GROQ_API_KEY est configuré."
+)
+
 
 class LLMRouter:
     """Routeur multi-provider avec fallback automatique.
@@ -96,10 +104,7 @@ class LLMRouter:
             if success:
                 return result  # type: ignore[return-value]
 
-        return (
-            "Désolé MAKEN, aucun provider LLM n'est disponible pour le moment. "
-            "Vérifie qu'Ollama est lancé ou que GROQ_API_KEY est configuré."
-        )
+        return ALL_PROVIDERS_FAILED
 
     async def health_all(self) -> list[ProviderHealth]:
         """Retourne le statut de santé de tous les providers enregistrés.
