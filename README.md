@@ -123,3 +123,20 @@ Personal project, actively developed in phases. Each phase ships on its own bran
 
 Author: **Leonel Maken Dongmo Djouake** - Yaounde, Cameroon
 [GitHub](https://github.com/leonelmaken) - [LinkedIn](https://www.linkedin.com/in/leonelmaken) - [Portfolio](https://portfolio-leonel-xi.vercel.app)
+
+### A bug worth documenting: conversation histories bleeding across users
+
+While adding an unrelated feature, I noticed something that didn't add up: a chat session was showing history that didn't belong to the account I was signed in as.
+
+The cause was not the authentication itself - sign-in worked. It was that session lookup trusted the session identifier alone. If you held a session id, the API returned that session's history, regardless of who you were authenticated as. Authentication proved *who you were*; nothing checked *what you were allowed to read*. On a single-user machine this is invisible. The moment a second account exists, it is a cross-account data leak.
+
+The fix has two independent layers, deliberately:
+
+1. **Scoped queries.** Every history route now takes `current_user` through a `require_chat_user` dependency, and every lookup is filtered by that user's id - `list_sessions(user_id=...)`, `get_session_for_user(session_id, user_id)`. A session belonging to someone else is never fetched in the first place.
+2. **An explicit ownership assertion.** Before any session is returned or mutated, the handler compares the stored owner against the authenticated user and refuses on mismatch.
+
+The second layer is redundant while the first is correct - which is the point. A future refactor that loosens a query still hits a hard stop before data leaves the process.
+
+**How I knew it was fixed:** signing in as a second account and requesting a session id belonging to the first now fails at the ownership check rather than returning data.
+
+**What I took from it:** authentication and authorisation are different questions, and passing the first tells you nothing about the second. I now treat "who is asking" and "what may they see" as two checks, not one.
